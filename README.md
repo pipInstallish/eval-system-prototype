@@ -25,7 +25,7 @@ Opens on http://localhost:5181
 | `/agents/:id/analytics/batches` | Batch list |
 | `/agents/:id/analytics/batch/:batchId` | Batch view |
 | `/agents/:id/evals/:evalKey/evidence` | Every call where one eval broke, with the criterion and the quote |
-| `/agents/:id/calls/:callId` | Full call — transcript, audio, all eval results |
+| `/agents/:id/calls/:callId` | Full call — transcript and all eval results |
 
 The evidence table opens a drawer for a quick scan (judge reason, other evals on the
 call, flag, mark as test). The drawer links to the full call page for the transcript.

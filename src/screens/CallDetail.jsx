@@ -6,7 +6,7 @@ import {
   getUniverse, callResults, transcriptFor, highlightTurns,
   reasonFor, fmtDur, fmtDate, isTest, renderText, FAIL
 } from '../data/universe.js'
-import { Player, Verdict, Section, Notice, Empty } from '../components/ui.jsx'
+import { Verdict, Notice, Empty } from '../components/ui.jsx'
 
 function TurnText ({ turn, hit, call }) {
   const text = renderText(turn.text, call)
@@ -87,9 +87,7 @@ export default function CallDetail () {
 
       <div className="layout-2col" style={{ marginTop: 'var(--s6)' }}>
         <div className="col-main">
-          <Player durationSec={call.durationSec} />
-
-          <div style={{ marginTop: 'var(--s5)' }}>
+          <div className="transcript">
             {tr.turns.map((t, i) => {
               const hit = hits.includes(i)
               return (

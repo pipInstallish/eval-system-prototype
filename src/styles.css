@@ -493,6 +493,7 @@ input, select, textarea { background: var(--ground); }
 .col-main { flex: 1 1 auto; min-width: 0; }
 .col-side { flex: 0 0 320px; position: sticky; top: var(--s5); }
 
+.transcript { padding-top: var(--s2); }
 .turn { display: flex; gap: var(--s4); padding: 10px 0; }
 .turn-who {
   flex: 0 0 74px;
@@ -510,33 +511,6 @@ input, select, textarea { background: var(--ground); }
 }
 .turn.is-hit .turn-who { color: var(--sev-zero); }
 .turn-time { font-size: var(--t-11); color: var(--ink-3); flex: 0 0 38px; text-align: right; padding-top: 3px; }
-
-.player {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-  padding: var(--s4) 0;
-  border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-}
-.player-btn {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  border: 1px solid var(--hairline-strong);
-  background: var(--ground);
-  cursor: pointer;
-  color: var(--ink);
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px;
-  flex: 0 0 30px;
-}
-.player-track { flex: 1 1 auto; height: 2px; background: var(--hairline); position: relative; }
-.player-fill { position: absolute; inset: 0 auto 0 0; background: var(--ink-3); }
-.player-dot {
-  position: absolute; top: -3px; width: 8px; height: 8px;
-  border-radius: 50%; background: var(--ink); transform: translateX(-4px);
-}
-.player-time { font-size: var(--t-12); color: var(--ink-3); flex: 0 0 auto; }
 
 .eval-mini { border-top: 1px solid var(--hairline); }
 .eval-mini-row {
@@ -748,7 +722,7 @@ input, select, textarea { background: var(--ground); }
 
 .btn, .btn-quiet, .icon-btn, .disclose, .tab, .rail-item,
 .select, .input, .textarea, .toggle-track, .choice, .th-sort,
-.player-btn, .var-chip, .crumb a, .eval-mini-row .btn-quiet {
+.var-chip, .crumb a, .eval-mini-row .btn-quiet {
   transition:
     background-color var(--fast) var(--ease),
     border-color var(--fast) var(--ease),
@@ -759,7 +733,6 @@ input, select, textarea { background: var(--ground); }
 
 .btn:active:not(:disabled),
 .icon-btn:active,
-.player-btn:active,
 .disclose:active { transform: translateY(1px); }
 
 .btn-primary:active:not(:disabled) { transform: translateY(1px); }

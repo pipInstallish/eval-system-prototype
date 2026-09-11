@@ -185,53 +185,6 @@ export function Drawer ({ title, sub, onClose, footer, wide, closing, children }
   )
 }
 
-/* ── fake audio ────────────────────────────────────────── */
-export function Player ({ durationSec }) {
-  const [playing, setPlaying] = useState(false)
-  const [at, setAt] = useState(0)
-  useEffect(() => {
-    if (!playing) return
-    const id = setInterval(() => {
-      setAt(v => {
-        if (v + 1 >= durationSec) { setPlaying(false); return durationSec }
-        return v + 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
-  }, [playing, durationSec])
-
-  const f = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-  const w = `${(at / durationSec) * 100}%`
-  return (
-    <div className="player">
-      <button type="button" className="player-btn" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'}>
-        {playing ? '❙❙' : '▶'}
-      </button>
-      <div
-        className="player-track"
-        role="slider"
-        tabIndex={0}
-        aria-label="Call position"
-        aria-valuemin={0}
-        aria-valuemax={durationSec}
-        aria-valuenow={Math.round(at)}
-        onClick={ev => {
-          const r = ev.currentTarget.getBoundingClientRect()
-          setAt(Math.max(0, Math.min(durationSec, ((ev.clientX - r.left) / r.width) * durationSec)))
-        }}
-        onKeyDown={ev => {
-          if (ev.key === 'ArrowRight') setAt(v => Math.min(durationSec, v + 5))
-          if (ev.key === 'ArrowLeft') setAt(v => Math.max(0, v - 5))
-        }}
-      >
-        <div className="player-fill" style={{ width: w }} />
-        <div className="player-dot" style={{ left: w }} />
-      </div>
-      <span className="player-time">{f(at)} / {f(durationSec)}</span>
-    </div>
-  )
-}
-
 export function Verdict ({ v }) {
   const map = { 0: ['v-pass', 'Pass'], 1: ['v-fail', 'Fail'], 2: ['v-unknown', 'Unknown'], 3: ['v-error', 'Judge error'] }
   const [cls, label] = map[v]
