@@ -729,3 +729,11 @@ input, select, textarea { background: var(--ground); }
 }
 .pill-live { color: var(--ink); border-color: var(--hairline-strong); background: var(--wash); }
 .pill-draft { color: var(--sev-critical); border-color: #e4d9be; background: #fdfaf2; }
+
+.set-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s6) 0 var(--s4);
+}

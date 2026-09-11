@@ -37,8 +37,8 @@ set or start empty, then add evals, import a CSV or JSON file, and pick the prom
 The live set keeps running the whole time. Publishing the draft makes it the next version and
 retires the current one to history, where it keeps the evals it actually ran with.
 
-Stopping evals is a separate action from drafting. It pauses the nightly job without touching
-the live set.
+Unpublish stops the live set running without deleting it; Publish puts it back. There is no
+separate on/off switch, because a published set is exactly the set that runs tonight.
 
 Acceptance criteria are a list, not a paragraph. Add or remove boxes in the form; a failing
 call shows every criterion it broke as a tile on the evidence page.

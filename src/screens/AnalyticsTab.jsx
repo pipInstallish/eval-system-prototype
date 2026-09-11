@@ -52,12 +52,14 @@ export default function AnalyticsTab () {
   )
   const agg = useMemo(() => aggregate(base, scoped), [base, scoped])
 
-  if (!state.evalsOn) {
+  if (base.evaluated === 0) {
     return (
       <div className="section-tight">
         <Empty
-          title="Evals are off for this agent."
-          body="Turn them on in the Evals tab. The first results appear after the next nightly run."
+          title="No eval results yet."
+          body={state.published
+            ? 'The first results appear after tonight\'s run.'
+            : 'This agent has no published eval set. Publish one in the Evals tab.'}
         />
       </div>
     )
@@ -104,10 +106,10 @@ export default function AnalyticsTab () {
 
       <AllEvals agentId={agentId} rows={agg.rows} scope={{ batch: filters.batch, range: filters.range }} />
 
-      {!state.running && (
+      {!state.published && (
         <div style={{ marginTop: 'var(--s6)' }}>
           <Notice warn>
-            Evals are stopped for this agent. Nothing new is evaluated tonight. The numbers below are from past runs.
+            {state.currentVersionId} is not published. Nothing new is evaluated tonight. The numbers below are from past runs.
           </Notice>
         </div>
       )}

@@ -19,9 +19,8 @@ function initialAgentState () {
   const out = {}
   AGENTS.forEach(a => {
     out[a.id] = {
-      evalsOn: a.evalsOn,
       runRules: { ...a.runRules },
-      running: true,                       // is the live set being run at night
+      published: a.evalsOn,          // is there a live set running tonight
       promptVersion: a.promptVersion,      // prompt the live set is paired with
       // every version keeps the evals it actually ran with
       versions: a.versions.map((v, i) => ({
@@ -75,19 +74,17 @@ export function Store ({ children }) {
     say,
 
     /* ── the live set ─────────────────────────────────── */
-    setEvalsOn: (id, on) => {
-      patchAgent(id, { evalsOn: on })
-      say(on ? 'Evals turned on. Next run tonight.' : 'Evals turned off for this agent.')
-    },
     setRunRule: (id, key, value) => patchAgent(id, s => ({ runRules: { ...s.runRules, [key]: value } })),
 
-    stopRunning: id => {
-      patchAgent(id, { running: false })
-      say('Evals stopped. The live set stays, nothing runs tonight.')
+    unpublish: id => {
+      patchAgent(id, { published: false })
+      const v = agentState[id].currentVersionId
+      say(`${v} unpublished. Nothing runs tonight until you publish a set.`)
     },
-    startRunning: id => {
-      patchAgent(id, { running: true })
-      say('Evals running again from tonight.')
+    republish: id => {
+      patchAgent(id, { published: true })
+      const v = agentState[id].currentVersionId
+      say(`${v} is live again. It runs from tonight.`)
     },
 
     /* ── the draft set, independent of the live one ───── */
@@ -143,7 +140,7 @@ export function Store ({ children }) {
         return {
           liveEvals: s.draft.evals.map(ev => ({ ...ev })),
           promptVersion: s.draft.promptVersion,
-          running: true,
+          published: true,
           currentVersionId: nextId,
           draft: null,
           versions: [

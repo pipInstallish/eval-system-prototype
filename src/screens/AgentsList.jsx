@@ -23,7 +23,7 @@ function Health ({ level }) {
 
 export default function AgentsList () {
   const nav = useNavigate()
-  const { say } = useStore()
+  const { say, agentState } = useStore()
   const rows = AGENTS.map(a => ({ a, health: agentHealth(a.id) }))
 
   return (
@@ -45,7 +45,7 @@ export default function AgentsList () {
               <th style={{ width: '34%' }}>Agent</th>
               <th style={{ width: '11%' }}>Status</th>
               <th className="r" style={{ width: '16%' }}>Calls, 7 days</th>
-              <th style={{ width: '13%' }}>Evals</th>
+              <th style={{ width: '13%' }}>Eval set</th>
               <th style={{ width: '26%' }}>Eval health</th>
             </tr>
           </thead>
@@ -64,7 +64,7 @@ export default function AgentsList () {
                 </td>
                 <td><span className="cell-sub">{a.status}</span></td>
                 <td className="r"><span className="n-md">{int(a.calls7d)}</span></td>
-                <td><span className="cell-sub">{a.evalsOn ? 'On' : 'Off'}</span></td>
+                <td><span className="cell-sub">{agentState[a.id].published ? agentState[a.id].currentVersionId : 'Not published'}</span></td>
                 <td>
                   <Health level={health.level} />
                   {health.level === 'red' && (
@@ -73,7 +73,7 @@ export default function AgentsList () {
                   {health.level === 'amber' && (
                     <div className="cell-meta">{health.belowCount} below baseline</div>
                   )}
-                  {health.level === 'off' && <div className="cell-meta">Evals are off</div>}
+                  {health.level === 'off' && <div className="cell-meta">No published set</div>}
                 </td>
               </tr>
             ))}

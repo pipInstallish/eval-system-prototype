@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../state/store.jsx'
 import { DEFAULT_BASELINE } from '../data/catalogue.js'
-import { Severity, Drawer, Toggle, Section, Notice, Empty } from '../components/ui.jsx'
+import { Severity, Drawer, Section, Notice, Empty } from '../components/ui.jsx'
 import { SAMPLE_JSON, evalsFromJson } from '../data/evalJson.js'
 
 const EXAMPLE_PROMPT = `You are grading one rule on a sales call transcript. Grade only this rule. Ignore all other behaviour.
@@ -565,13 +565,20 @@ export default function EvalsTab () {
 
   return (
     <>
+      <div className="set-head">
+        <h2 className="section-title">Eval sets</h2>
+        {draft
+          ? <span className="section-note">{nextId} is in draft</span>
+          : <button type="button" className="btn btn-primary" onClick={() => setDrawer('new')}>New eval set</button>}
+      </div>
+
       <div className="banner">
         <div className="banner-left">
           <select className="select" aria-label="Eval set" value={viewing} onChange={e => setView(e.target.value)}>
             {draft && <option value="draft">{nextId} — draft</option>}
             {state.versions.map(v => (
               <option key={v.id} value={v.id}>
-                {v.label}{v.id === liveId ? (state.running ? ' — live' : ' — live, stopped') : ''}
+                {v.label}{v.id === liveId ? (state.published ? ' — live' : ' — not published') : ''}
               </option>
             ))}
           </select>
@@ -596,8 +603,8 @@ export default function EvalsTab () {
             </>
           ) : onLive ? (
             <>
-              <span className={`pill ${state.running ? 'pill-live' : 'pill-draft'}`}>
-                {state.running ? 'Live' : 'Stopped'}
+              <span className={`pill ${state.published ? 'pill-live' : 'pill-draft'}`}>
+                {state.published ? 'Live' : 'Not published'}
               </span>
               <span className="banner-meta">{state.versions[0].publishedOn} by {state.versions[0].publishedBy}</span>
               <span className="banner-meta">Running on <span className="mono">{state.promptVersion}</span></span>
@@ -622,12 +629,9 @@ export default function EvalsTab () {
             </>
           )}
           {onLive && (
-            <>
-              {state.running
-                ? <button type="button" className="btn" onClick={() => store.stopRunning(agentId)}>Stop evals</button>
-                : <button type="button" className="btn" onClick={() => store.startRunning(agentId)}>Start evals</button>}
-              {!draft && <button type="button" className="btn btn-primary" onClick={() => setDrawer('new')}>New eval set</button>}
-            </>
+            state.published
+              ? <button type="button" className="btn" onClick={() => store.unpublish(agentId)}>Unpublish {liveId}</button>
+              : <button type="button" className="btn btn-primary" onClick={() => store.republish(agentId)}>Publish {liveId}</button>
           )}
         </div>
       </div>
@@ -638,12 +642,12 @@ export default function EvalsTab () {
             This set is not running. {liveId} keeps running until you publish {nextId}.
           </Notice>
         ) : onLive ? (
-          state.running ? (
+          state.published ? (
             <Notice>
-              {liveId} runs every night. Published sets cannot be changed. Start a new set to make changes.
+              {liveId} runs every night. A published set cannot be changed. Start a new set to make changes.
             </Notice>
           ) : (
-            <Notice warn>Evals are stopped. {liveId} is still the live set, but nothing runs tonight.</Notice>
+            <Notice warn>{liveId} is not published. Nothing runs tonight.</Notice>
           )
         ) : (
           <Notice>An older set, kept for the results it produced.</Notice>
@@ -683,12 +687,6 @@ export default function EvalsTab () {
 
       <Section title="Run rules">
         <div className="def-list" style={{ maxWidth: 720 }}>
-          <div className="def-row">
-            <div className="def-key">Evals</div>
-            <div className="def-val">
-              <Toggle on={state.evalsOn} onChange={v => store.setEvalsOn(agentId, v)} label={state.evalsOn ? 'On' : 'Off'} />
-            </div>
-          </div>
           <div className="def-row">
             <div className="def-key">Minimum call length</div>
             <div className="def-val">
