@@ -46,8 +46,9 @@ acceptance criteria failing, the agent line, the judge reason, and whether it is
 
 Evals are authored two ways: **Add eval** (name and severity, scoring type, trigger
 condition, acceptance criteria, good and bad examples, judge prompt) or **Import evals**
-from CSV. Import shows a preview of the file, then asks whether to add the rows to the
-current set or replace it. Replacing only changes the draft set: published versions keep the
+from CSV, or **Import JSON**, which shows a copyable template, parses what you paste for real
+and reports what is wrong with it. Both imports show a preview, then ask whether to add the
+rows to the current set or replace it. Replacing only changes the draft set: published versions keep the
 evals they ran with, so past results and evidence stay valid.
 
 Both paths link to `public/context.md`, which a user pastes into Claude or ChatGPT to

@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '../state/store.jsx'
 import { DEFAULT_BASELINE } from '../data/catalogue.js'
 import { Severity, Drawer, Toggle, Section, Notice, Empty } from '../components/ui.jsx'
+import { SAMPLE_JSON, evalsFromJson } from '../data/evalJson.js'
 
 const EXAMPLE_PROMPT = `You are grading one rule on a sales call transcript. Grade only this rule. Ignore all other behaviour.
 
@@ -259,33 +260,50 @@ function AddEval ({ onClose, onSave, say }) {
 }
 
 /* ── import ────────────────────────────────────────────── */
-function ImportEvals ({ onClose, onAdd, onReplace, currentCount }) {
+const CSV_ROWS = [
+  { key: 'agent_states_call_reason', name: 'agent_states_call_reason', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Every call that is answered.', prompt: 'Pass if the agent says why it is calling within the first two turns.', criteria: ['Pass if the agent says why it is calling within the first two turns'], status: 'draft' },
+  { key: 'no_cross_sell_other_program', name: 'no_cross_sell_other_program', severity: 'critical', baseline: 95, baselineOverride: false, applies: 'Calls where the lead asks about other programs.', prompt: 'Fail if the agent pitches a program other than the one in the lead record.', criteria: ['Pass if only the program in the lead record is pitched'], status: 'draft' },
+  { key: 'spells_counsellor_name', name: 'spells_counsellor_name', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where a counsellor is named.', prompt: 'Pass if the counsellor name the agent says matches the lead record.', criteria: ['Pass if the counsellor name matches the lead record'], status: 'draft' },
+  { key: 'no_number_read_incorrectly', name: 'no_number_read_incorrectly', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where the agent reads a number aloud.', prompt: 'Fail if a phone number, date or time is read differently from the input variable.', criteria: ['Pass if every number matches the input variables'], status: 'draft' }
+]
+
+function ImportEvals ({ format, onClose, onAdd, onReplace, currentCount, say }) {
+  const isJson = format === 'json'
   const [stage, setStage] = useState('pick')
   const [progress, setProgress] = useState(0)
   const [mode, setMode] = useState('add')
+  const [text, setText] = useState('')
+  const [error, setError] = useState(null)
+  const [rows, setRows] = useState([])
   const file = 'rcb_evals_sep.csv'
 
-  const run = () => {
+  const readCsv = () => {
     setStage('reading')
     let p = 0
     const id = setInterval(() => {
       p += 20
       setProgress(p)
-      if (p >= 100) { clearInterval(id); setStage('done') }
+      if (p >= 100) { clearInterval(id); setRows(CSV_ROWS); setStage('done') }
     }, 180)
   }
 
-  const rows = useMemo(() => ([
-    { key: 'agent_states_call_reason', name: 'agent_states_call_reason', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Every call that is answered.', prompt: 'Pass if the agent says why it is calling within the first two turns.', criteria: ['Reason given in the first two turns'], status: 'draft' },
-    { key: 'no_cross_sell_other_program', name: 'no_cross_sell_other_program', severity: 'critical', baseline: 95, baselineOverride: false, applies: 'Calls where the lead asks about other programs.', prompt: 'Fail if the agent pitches a program other than the one in the lead record.', criteria: ['Only the recorded program is pitched'], status: 'draft' },
-    { key: 'spells_counsellor_name', name: 'spells_counsellor_name', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where a counsellor is named.', prompt: 'Pass if the counsellor name the agent says matches the lead record.', criteria: ['Counsellor name matches the record'], status: 'draft' },
-    { key: 'no_number_read_incorrectly', name: 'no_number_read_incorrectly', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where the agent reads a number aloud.', prompt: 'Fail if a phone number, date or time is read differently from the input variable.', criteria: ['Numbers match the input variables'], status: 'draft' }
-  ]), [])
+  const readJson = () => {
+    const out = evalsFromJson(text)
+    if (out.error) { setError(out.error); return }
+    setError(null)
+    setRows(out.rows)
+    setStage('done')
+  }
+
+  const copyTemplate = async () => {
+    try { await navigator.clipboard.writeText(SAMPLE_JSON) } catch (err) { /* clipboard blocked */ }
+    say('Template copied.')
+  }
 
   return (
     <Drawer
-      title="Import evals"
-      sub="One eval per row."
+      title={isJson ? 'Import JSON' : 'Import CSV'}
+      sub={isJson ? 'A list of evals.' : 'One eval per row.'}
       wide
       onClose={onClose}
       footer={
@@ -304,18 +322,64 @@ function ImportEvals ({ onClose, onAdd, onReplace, currentCount }) {
             </>
           : <>
               <button type="button" className="btn" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn-primary" disabled={stage !== 'pick'} onClick={run}>Read file</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={stage !== 'pick' || (isJson && !text.trim())}
+                onClick={isJson ? readJson : readCsv}
+              >
+                {isJson ? 'Read JSON' : 'Read file'}
+              </button>
             </>
       }
     >
-      <ContextHelper line="No CSV yet? Paste this file into Claude or ChatGPT. It asks a few questions and writes the CSV in the right format." />
+      <ContextHelper
+        line={isJson
+          ? 'No evals written yet? Paste this file into Claude or ChatGPT. It asks a few questions and writes them for you.'
+          : 'No CSV yet? Paste this file into Claude or ChatGPT. It asks a few questions and writes the CSV in the right format.'}
+      />
 
-      {stage === 'pick' && (
+      {stage === 'pick' && isJson && (
+        <>
+          <div className="label-row">
+            <span className="form-label">Template</span>
+            <div className="btn-row">
+              <button type="button" className="btn-quiet" onClick={copyTemplate}>Copy</button>
+              <button type="button" className="btn-quiet" onClick={() => { setText(SAMPLE_JSON); setError(null) }}>
+                Use this template
+              </button>
+            </div>
+          </div>
+          <div className="example-block">
+            <pre className="mono">{SAMPLE_JSON}</pre>
+          </div>
+
+          <div style={{ marginTop: 'var(--s5)' }}>
+            <label className="form-label" htmlFor="json-in">Your JSON</label>
+            <textarea
+              id="json-in"
+              className="textarea mono"
+              rows={9}
+              value={text}
+              placeholder={'[\n  {\n    "name": "...",\n    "severity": "moderate",\n    "acceptance_criteria": ["Pass if ..."],\n    "judge_prompt": "..."\n  }\n]'}
+              onChange={e => { setText(e.target.value); setError(null) }}
+            />
+          </div>
+
+          {error && (
+            <div style={{ marginTop: 'var(--s4)' }}>
+              <Notice warn>{error}</Notice>
+            </div>
+          )}
+        </>
+      )}
+
+      {stage === 'pick' && !isJson && (
         <>
           <div className="upload-zone">
             <p>Drop a CSV here, or pick a file.</p>
             <div style={{ marginTop: 'var(--s4)' }}>
-              <button type="button" className="btn" onClick={run}>Choose file</button>
+              <button type="button" className="btn" onClick={readCsv}>Choose file</button>
             </div>
             <p style={{ marginTop: 'var(--s4)', fontSize: 12, color: 'var(--ink-3)' }}>{file}</p>
           </div>
@@ -327,15 +391,19 @@ function ImportEvals ({ onClose, onAdd, onReplace, currentCount }) {
           </div>
         </>
       )}
+
       {stage === 'reading' && (
         <div>
           <div className="cell-sub">Reading {file}</div>
           <div className="progress"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
         </div>
       )}
+
       {stage === 'done' && (
         <div>
-          <div className="cell-sub" style={{ marginBottom: 'var(--s4)' }}>{file} — {rows.length} rows, no errors</div>
+          <div className="cell-sub" style={{ marginBottom: 'var(--s4)' }}>
+            {isJson ? `${rows.length} evals read, no errors` : `${file} — ${rows.length} rows, no errors`}
+          </div>
           <div className="table-wrap">
             <table className="table">
               <thead><tr><th>Eval</th><th>Severity</th></tr></thead>
@@ -512,7 +580,8 @@ export default function EvalsTab () {
               <button type="button" className="btn" onClick={() => store.unpublish(agentId)}>Unpublish</button>
             ) : (
               <>
-                <button type="button" className="btn" onClick={() => setDrawer('import')}>Import evals</button>
+                <button type="button" className="btn" onClick={() => setDrawer('csv')}>Import CSV</button>
+                <button type="button" className="btn" onClick={() => setDrawer('json')}>Import JSON</button>
                 <button type="button" className="btn" onClick={() => setDrawer('add')}>Add eval</button>
                 <button type="button" className="btn btn-primary" onClick={() => setDrawer('publish')}>
                   Publish v{state.versions.length + 1}
@@ -622,10 +691,12 @@ export default function EvalsTab () {
       </Section>
 
       {drawer === 'add' && <AddEval onClose={() => setDrawer(null)} onSave={d => store.addEval(agentId, d)} say={store.say} />}
-      {drawer === 'import' && (
+      {(drawer === 'csv' || drawer === 'json') && (
         <ImportEvals
+          format={drawer}
           onClose={() => setDrawer(null)}
           currentCount={state.evals.length}
+          say={store.say}
           onAdd={rows => store.addBulk(agentId, rows)}
           onReplace={rows => store.replaceEvals(agentId, rows)}
         />

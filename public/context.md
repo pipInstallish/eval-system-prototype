@@ -104,7 +104,45 @@ Keep `{{transcript}}` exactly as written. The system fills it in.
 
 ## Output
 
-When the user is happy, output a CSV in a fenced block. Header row exactly:
+Ask the user which they want: **CSV** or **JSON**. Both upload into the CRM under Evals.
+JSON is easier to read and keeps line breaks in the judge prompt, so suggest it unless the
+user wants to open the file in a spreadsheet.
+
+### JSON
+
+Output a fenced `json` block: a list of objects, one per eval.
+
+```json
+[
+  {
+    "name": "never_calls_counsellor_call_free",
+    "severity": "moderate",
+    "scoring_type": "yes_no_na",
+    "baseline": 75,
+    "trigger_condition": "Applies only if the agent mentions the counsellor conversation at any point in the call. If the counsellor was never mentioned, mark it not applicable.",
+    "acceptance_criteria": [
+      "Pass if the agent never uses the word \"free\", or any equivalent, when describing the counsellor conversation",
+      "Pass if the agent says it is \"not chargeable\" when the customer asks whether it costs money"
+    ],
+    "good_examples": ["..."],
+    "bad_examples": ["..."],
+    "judge_prompt": "...{{transcript}}"
+  }
+]
+```
+
+- `severity`: `zero_tolerance`, `critical` or `moderate`
+- `scoring_type`: `yes_no_na`, `yes_no`, `score_5` or `score_10`
+- `baseline` is optional. Leave it out for the default (95 for critical, 75 for moderate),
+  and always leave it out for zero tolerance.
+- `acceptance_criteria` is a list. Each entry is one condition and starts with "Pass if".
+- Escape line breaks inside `judge_prompt` as `\n`.
+
+Tell the user to paste it under Evals, Import JSON.
+
+### CSV
+
+Output a CSV in a fenced block. Header row exactly:
 
 ```
 name,severity,scoring_type,trigger_condition,acceptance_criteria,good_examples,bad_examples,judge_prompt
@@ -119,7 +157,7 @@ Rules for the CSV:
 - Keep line breaks inside the judge prompt as `\n`
 - One row per eval. Write as many rows as the user has evals.
 
-Tell the user to save it as a `.csv` file and upload it under Evals, Import evals.
+Tell the user to save it as a `.csv` file and upload it under Evals, Import CSV.
 
 ---
 
