@@ -44,7 +44,7 @@ function ContextHelper ({ line }) {
   return (
     <p className="helper">
       {line}{' '}
-      <a href="/context.md" download="context.md">Download context.md</a>
+      <a href={`${import.meta.env.BASE_URL}context.md`} download="context.md">Download context.md</a>
     </p>
   )
 }
