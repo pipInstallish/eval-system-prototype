@@ -23,7 +23,7 @@ function Health ({ level }) {
 
 export default function AgentsList () {
   const nav = useNavigate()
-  const { say, agentState } = useStore()
+  const { say, agentState, startTour } = useStore()
   const rows = AGENTS.map(a => ({ a, health: agentHealth(a.id) }))
 
   return (
@@ -34,12 +34,13 @@ export default function AgentsList () {
           <p className="page-sub">Voice agents that run from the CRM.</p>
         </div>
         <div className="btn-row">
+          <button type="button" className="btn" onClick={startTour}>Guided tour</button>
           <button type="button" className="btn" onClick={() => say('The agent builder opens here.')}>Add agent</button>
         </div>
       </div>
 
       <div className="table-wrap">
-        <table className="table" style={{ marginTop: 'var(--s6)' }}>
+        <table className="table" data-tour="agent-list" style={{ marginTop: 'var(--s6)' }}>
           <thead>
             <tr>
               <th style={{ width: '34%' }}>Agent</th>

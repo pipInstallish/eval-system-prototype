@@ -41,6 +41,7 @@ export function Store ({ children }) {
   const [flags, setFlags] = useState({})
   const [testOverrides, setTestOverrides] = useState({})
   const [toast, setToast] = useState(null)
+  const [tourOpen, setTourOpen] = useState(false)
   const timer = useRef(null)
 
   const leaving = useRef(null)
@@ -77,6 +78,9 @@ export function Store ({ children }) {
     testOverrides,
     toast,
     say,
+    tourOpen,
+    startTour: () => setTourOpen(true),
+    endTour: () => setTourOpen(false),
 
     /* ── the live set ─────────────────────────────────── */
     setRunRule: (id, key, value) => patchAgent(id, s => ({ runRules: { ...s.runRules, [key]: value } })),
@@ -174,7 +178,7 @@ export function Store ({ children }) {
       setTestOverrides(t => ({ ...t, [callId]: on }))
       say(on ? 'Marked as a test call. Removed from stats.' : 'No longer a test call.')
     }
-  }), [agentState, filters, flags, testOverrides, toast, say, patchAgent, patchDraft])
+  }), [agentState, filters, flags, testOverrides, toast, tourOpen, say, patchAgent, patchDraft])
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }

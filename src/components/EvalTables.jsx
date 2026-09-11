@@ -154,6 +154,7 @@ export function AllEvals ({ agentId, rows, scope }) {
 
   return (
     <Disclosure
+      tourId="all-evals"
       title="All evals"
       note={`${rows.length} evals. Pass and fail count only the calls where the eval applied.`}
       open={open}

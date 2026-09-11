@@ -574,14 +574,14 @@ export default function EvalsTab () {
 
   return (
     <>
-      <div className="set-head">
+      <div className="set-head" data-tour="sets">
         <h2 className="section-title">Eval sets</h2>
         {draft
           ? <span className="section-note">{nextId} is in draft</span>
           : <button type="button" className="btn btn-primary" onClick={() => setDrawer('new')}>New eval set</button>}
       </div>
 
-      <div className="banner">
+      <div className="banner" data-tour="set-banner">
         <div className="banner-left">
           <select className="select" aria-label="Eval set" value={viewing} onChange={e => setView(e.target.value)}>
             {draft && <option value="draft">{nextId} — draft</option>}
@@ -696,7 +696,7 @@ export default function EvalsTab () {
         </div>
       </Section>
 
-      <Section title="Run rules">
+      <Section tourId="run-rules" title="Run rules">
         <div className="def-list" style={{ maxWidth: 720 }}>
           <div className="def-row">
             <div className="def-key">Minimum call length</div>

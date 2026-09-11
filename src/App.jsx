@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, NavLink, useLocation, useParams } from 'react-router-dom'
+import Tour from './components/Tour.jsx'
 import { useStore } from './state/store.jsx'
 import AgentsList from './screens/AgentsList.jsx'
 import AgentDetail from './screens/AgentDetail.jsx'
@@ -16,7 +17,7 @@ function FailuresRedirect () {
   return <Navigate to={`/agents/${agentId}/evals/${evalKey}/evidence`} replace />
 }
 
-function Rail () {
+function Rail ({ onTour }) {
   const loc = useLocation()
   const onAgents = loc.pathname.startsWith('/agents')
   return (
@@ -38,19 +39,23 @@ function Rail () {
         <span className="rail-item is-muted">Team</span>
         <span className="rail-item is-muted">Integrations</span>
       </div>
+
+      <div className="rail-tour">
+        <button type="button" className="btn" onClick={onTour}>Guided tour</button>
+      </div>
     </nav>
   )
 }
 
 export default function App () {
-  const { toast } = useStore()
+  const { toast, tourOpen, startTour, endTour } = useStore()
   const loc = useLocation()
   // tabs animate on their own, so they should not re-trigger the page transition
   const group = loc.pathname.replace(/\/(configuration|evals|analytics)$/, '')
 
   return (
     <div className="shell">
-      <Rail />
+      <Rail onTour={startTour} />
       <main className="main">
         <div className="route-enter" key={group}>
         <Routes location={loc}>
@@ -74,6 +79,7 @@ export default function App () {
       {toast && (
         <div className={`toast${toast.leaving ? ' is-leaving' : ''}`} role="status">{toast.text}</div>
       )}
+      {tourOpen && <Tour onClose={endTour} />}
     </div>
   )
 }

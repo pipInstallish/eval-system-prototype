@@ -87,7 +87,7 @@ export default function CallDetail () {
 
       <div className="layout-2col" style={{ marginTop: 'var(--s6)' }}>
         <div className="col-main">
-          <div className="transcript">
+          <div className="transcript" data-tour="transcript">
             {tr.turns.map((t, i) => {
               const hit = hits.includes(i)
               return (
@@ -127,7 +127,7 @@ export default function CallDetail () {
             </div>
           </div>
 
-          <div className="side-block">
+          <div className="side-block" data-tour="call-evals">
             <div className="form-label">
               All evals on this call{failing.length > 1 ? ` — ${failing.length} failed` : ''}
             </div>

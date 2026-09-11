@@ -77,9 +77,9 @@ export function SortHeader ({ label, id, sort, setSort, align = 'left' }) {
 }
 
 /* ── layout bits ───────────────────────────────────────── */
-export function Section ({ title, note, right, children, tight }) {
+export function Section ({ title, note, right, children, tight, tourId }) {
   return (
-    <section className={tight ? 'section-tight' : 'section'}>
+    <section className={tight ? 'section-tight' : 'section'} data-tour={tourId}>
       <div className="section-head">
         <h2 className="section-title">{title}</h2>
         {right || (note ? <span className="section-note">{note}</span> : null)}
@@ -89,7 +89,7 @@ export function Section ({ title, note, right, children, tight }) {
   )
 }
 
-export function Disclosure ({ title, note, open, onToggle, children }) {
+export function Disclosure ({ title, note, open, onToggle, tourId, children }) {
   const inner = useRef(null)
   const [height, setHeight] = useState(0)
 
@@ -105,7 +105,7 @@ export function Disclosure ({ title, note, open, onToggle, children }) {
   }, [])
 
   return (
-    <section className="section">
+    <section className="section" data-tour={tourId}>
       <div className="section-head">
         <button type="button" className="disclose" aria-expanded={open} onClick={onToggle}>
           <span className="disclose-mark">▶</span>{title}
@@ -123,7 +123,7 @@ export function Disclosure ({ title, note, open, onToggle, children }) {
 
 export function Strip ({ items }) {
   return (
-    <div className="strip">
+    <div className="strip" data-tour="strip">
       {items.map(it => (
         <div className="strip-item" key={it.label}>
           <div className="strip-label">{it.label}</div>

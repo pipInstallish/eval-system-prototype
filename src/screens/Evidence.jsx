@@ -135,7 +135,7 @@ export default function Evidence () {
         </div>
       ) : (
         <div className="table-wrap">
-          <table className="table table-fixed" style={{ marginTop: 'var(--s6)' }}>
+          <table className="table table-fixed" data-tour="evidence" style={{ marginTop: 'var(--s6)' }}>
             <thead>
               <tr>
                 <th style={{ width: '10%' }}>Call id</th>

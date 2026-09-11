@@ -11,7 +11,7 @@ export function Filters ({ agentId, hideBatch }) {
   const set = (k, v) => setFilters(f => ({ ...f, [k]: v }))
 
   return (
-    <div className="filters">
+    <div className="filters" data-tour="filters">
       <div className="field">
         <label className="field-label" htmlFor="f-range">Dates</label>
         <select id="f-range" className="select" value={filters.range} onChange={e => set('range', e.target.value)}>
@@ -92,6 +92,7 @@ export default function AnalyticsTab () {
       <Strip items={strip} />
 
       <Section
+        tourId="failed"
         title="Failed evals"
         right={
           <Link className="section-note" to={`/agents/${agentId}/analytics/batches`}>By batch</Link>
