@@ -4,6 +4,16 @@ import { defaultFilters } from '../data/universe.js'
 
 const Ctx = createContext(null)
 
+// The tour runs on arrival, but a deep link means someone was sent to a
+// particular screen, so it should not drag them back to the start.
+function tourOnArrival () {
+  if (typeof window === 'undefined') return false
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
+  const path = window.location.pathname.replace(/\/+$/, '')
+  const route = path.startsWith(base) ? path.slice(base.length) : path
+  return route === '' || route === '/agents'
+}
+
 const toEval = ev => ({
   key: ev.key,
   name: ev.name,
@@ -41,7 +51,7 @@ export function Store ({ children }) {
   const [flags, setFlags] = useState({})
   const [testOverrides, setTestOverrides] = useState({})
   const [toast, setToast] = useState(null)
-  const [tourOpen, setTourOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(tourOnArrival)
   const timer = useRef(null)
 
   const leaving = useRef(null)

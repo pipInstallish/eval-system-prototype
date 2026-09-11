@@ -61,8 +61,9 @@ be interviewed and get back a CSV in the right columns.
 
 ## Guided tour
 
-**Guided tour** on the Managed Agents header, and in the left rail, walks through the whole
-product in 11 steps: the agent list, the health strip, filters, failed evals, the full table,
+The tour runs on arrival. Opening a deep link does not start it, since someone following a
+link was sent to a particular screen. **Guided tour** on the Managed Agents header, and in the
+left rail, starts it again at any time. It walks through the whole product in 11 steps: the agent list, the health strip, filters, failed evals, the full table,
 evidence, a real failing call, and the publish lifecycle. It navigates between screens on its
 own and spotlights the thing it is talking about. Arrow keys move between steps, Escape quits.
 
