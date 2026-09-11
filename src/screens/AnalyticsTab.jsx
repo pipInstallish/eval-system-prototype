@@ -104,10 +104,18 @@ export default function AnalyticsTab () {
 
       <AllEvals agentId={agentId} rows={agg.rows} scope={{ batch: filters.batch, range: filters.range }} />
 
-      {!state.published && (
+      {!state.running && (
         <div style={{ marginTop: 'var(--s6)' }}>
           <Notice warn>
-            The eval set is not published right now. Nothing new is evaluated tonight. The numbers below are from past runs.
+            Evals are stopped for this agent. Nothing new is evaluated tonight. The numbers below are from past runs.
+          </Notice>
+        </div>
+      )}
+
+      {state.draft && (
+        <div style={{ marginTop: 'var(--s6)' }}>
+          <Notice>
+            A new set is in draft with {state.draft.evals.length} evals. These numbers are from {state.currentVersionId}, which is still live.
           </Notice>
         </div>
       )}

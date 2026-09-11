@@ -4,17 +4,33 @@ import { defaultFilters } from '../data/universe.js'
 
 const Ctx = createContext(null)
 
+const toEval = ev => ({
+  key: ev.key,
+  name: ev.name,
+  severity: ev.severity,
+  baseline: ev.baseline,
+  baselineOverride: ev.baselineOverride,
+  applies: ev.applies,
+  prompt: ev.prompt,
+  criteria: ev.criteria || []
+})
+
 function initialAgentState () {
   const out = {}
   AGENTS.forEach(a => {
     out[a.id] = {
       evalsOn: a.evalsOn,
-      published: true,
-      promptVersion: a.promptVersion,
       runRules: { ...a.runRules },
-      versions: a.versions.map(v => ({ ...v })),
+      running: true,                       // is the live set being run at night
+      promptVersion: a.promptVersion,      // prompt the live set is paired with
+      // every version keeps the evals it actually ran with
+      versions: a.versions.map((v, i) => ({
+        ...v,
+        evals: i === 0 ? a.evals.map(toEval) : a.evals.slice(0, v.evalCount).map(toEval)
+      })),
       currentVersionId: a.versions[0].id,
-      evals: a.evals.map(ev => ({ key: ev.key, name: ev.name, severity: ev.severity, baseline: ev.baseline, baselineOverride: ev.baselineOverride, applies: ev.applies, prompt: ev.prompt, status: 'live' }))
+      liveEvals: a.evals.map(toEval),      // the published set. Immutable.
+      draft: null                          // { evals, promptVersion, basedOn } or nothing
     }
   })
   return out
@@ -23,8 +39,8 @@ function initialAgentState () {
 export function Store ({ children }) {
   const [agentState, setAgentState] = useState(initialAgentState)
   const [filters, setFilters] = useState(defaultFilters)
-  const [flags, setFlags] = useState({})           // `${callId}|${evalKey}` -> reason
-  const [testOverrides, setTestOverrides] = useState({})  // callId -> boolean
+  const [flags, setFlags] = useState({})
+  const [testOverrides, setTestOverrides] = useState({})
   const [toast, setToast] = useState(null)
   const timer = useRef(null)
 
@@ -33,11 +49,20 @@ export function Store ({ children }) {
   const say = useCallback(msg => {
     setToast(msg)
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => setToast(null), 3200)
+    timer.current = setTimeout(() => setToast(null), 3600)
   }, [])
 
   const patchAgent = useCallback((id, patch) => {
     setAgentState(s => ({ ...s, [id]: { ...s[id], ...(typeof patch === 'function' ? patch(s[id]) : patch) } }))
+  }, [])
+
+  const patchDraft = useCallback((id, patch) => {
+    setAgentState(s => {
+      const a = s[id]
+      if (!a.draft) return s
+      const next = typeof patch === 'function' ? patch(a.draft) : patch
+      return { ...s, [id]: { ...a, draft: { ...a.draft, ...next } } }
+    })
   }, [])
 
   const api = useMemo(() => ({
@@ -49,69 +74,96 @@ export function Store ({ children }) {
     toast,
     say,
 
+    /* ── the live set ─────────────────────────────────── */
     setEvalsOn: (id, on) => {
       patchAgent(id, { evalsOn: on })
       say(on ? 'Evals turned on. Next run tonight.' : 'Evals turned off for this agent.')
     },
-    setRunRule: (id, key, value) =>
-      patchAgent(id, s => ({ runRules: { ...s.runRules, [key]: value } })),
+    setRunRule: (id, key, value) => patchAgent(id, s => ({ runRules: { ...s.runRules, [key]: value } })),
 
-    addEval: (id, draft) => {
+    stopRunning: id => {
+      patchAgent(id, { running: false })
+      say('Evals stopped. The live set stays, nothing runs tonight.')
+    },
+    startRunning: id => {
+      patchAgent(id, { running: true })
+      say('Evals running again from tonight.')
+    },
+
+    /* ── the draft set, independent of the live one ───── */
+    newDraft: (id, from) => {
       patchAgent(id, s => ({
-        evals: [...s.evals, {
-          key: draft.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
-          name: draft.name.trim(),
-          severity: draft.severity,
-          baseline: draft.severity === 'zero' ? null : (draft.baseline ?? DEFAULT_BASELINE[draft.severity]),
-          baselineOverride: draft.severity !== 'zero' && draft.baseline != null && draft.baseline !== DEFAULT_BASELINE[draft.severity],
-          scoring: draft.scoring,
-          applies: draft.trigger,
-          good: draft.good,
-          bad: draft.bad,
-          prompt: draft.prompt,
-          criteria: draft.criteria.map(c => c.trim()).filter(Boolean),
-          status: 'draft'
+        draft: {
+          basedOn: from === 'copy' ? s.currentVersionId : null,
+          promptVersion: s.promptVersion,
+          evals: from === 'copy' ? s.liveEvals.map(ev => ({ ...ev })) : []
+        }
+      }))
+      say(from === 'copy' ? 'New set started from the live set.' : 'Empty set started.')
+    },
+    discardDraft: id => {
+      patchAgent(id, { draft: null })
+      say('Draft set discarded. The live set is untouched.')
+    },
+    setDraftPromptVersion: (id, pv) => patchDraft(id, { promptVersion: pv }),
+
+    addEval: (id, d) => {
+      patchDraft(id, draft => ({
+        evals: [...draft.evals, {
+          key: d.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
+          name: d.name.trim(),
+          severity: d.severity,
+          baseline: d.severity === 'zero' ? null : (d.baseline ?? DEFAULT_BASELINE[d.severity]),
+          baselineOverride: d.severity !== 'zero' && d.baseline != null && d.baseline !== DEFAULT_BASELINE[d.severity],
+          scoring: d.scoring,
+          applies: d.trigger,
+          criteria: d.criteria.map(c => c.trim()).filter(Boolean),
+          good: d.good,
+          bad: d.bad,
+          prompt: d.prompt
         }]
       }))
-      say('Eval added as draft. Publish to make it live.')
+      say('Eval added to the draft set.')
     },
-
     addBulk: (id, rows) => {
-      patchAgent(id, s => ({ evals: [...s.evals, ...rows] }))
-      say(`${rows.length} evals added as drafts.`)
+      patchDraft(id, draft => ({ evals: [...draft.evals, ...rows] }))
+      say(`${rows.length} evals added to the draft set.`)
     },
-
-    unpublish: id => {
-      patchAgent(id, { published: false })
-      say('Eval set unpublished. Nothing runs tonight until you publish again.')
-    },
-
-    setPromptVersion: (id, pv) => patchAgent(id, { promptVersion: pv }),
-
     replaceEvals: (id, rows) => {
-      patchAgent(id, { evals: rows })
-      say(`Set replaced with ${rows.length} evals. Past results are not affected.`)
+      patchDraft(id, { evals: rows })
+      say(`Draft set replaced with ${rows.length} evals.`)
     },
 
-    publish: (id, promptVersion) => {
+    /* ── publishing swaps the live set ────────────────── */
+    publish: id => {
+      const a = agentState[id]
+      const nextLabel = `v${a.versions.length + 1}`
       patchAgent(id, s => {
-        const n = s.versions.length + 1
-        const nextId = `v${n}`
-        const count = s.evals.length
+        const nextId = `v${s.versions.length + 1}`
         return {
-          evals: s.evals.map(ev => ({ ...ev, status: 'live' })),
-          published: true,
-          promptVersion,
+          liveEvals: s.draft.evals.map(ev => ({ ...ev })),
+          promptVersion: s.draft.promptVersion,
+          running: true,
           currentVersionId: nextId,
+          draft: null,
           versions: [
-            { id: nextId, label: nextId, publishedOn: '11 Sep', publishedBy: 'You', promptVersion, evalCount: count },
+            {
+              id: nextId,
+              label: nextId,
+              publishedOn: '11 Sep',
+              publishedBy: 'You',
+              promptVersion: s.draft.promptVersion,
+              evalCount: s.draft.evals.length,
+              evals: s.draft.evals.map(ev => ({ ...ev }))
+            },
             ...s.versions
           ]
         }
       })
-      say(`Published. From tonight every eval runs against ${promptVersion}.`)
+      say(`${nextLabel} is live. From tonight every eval runs against ${a.draft.promptVersion}.`)
     },
 
+    /* ── review actions ───────────────────────────────── */
     flagJudge: (callId, evalKey, reason) => {
       setFlags(f => ({ ...f, [`${callId}|${evalKey}`]: reason || 'No reason given' }))
       say('Flagged for review.')
@@ -120,7 +172,7 @@ export function Store ({ children }) {
       setTestOverrides(t => ({ ...t, [callId]: on }))
       say(on ? 'Marked as a test call. Removed from stats.' : 'No longer a test call.')
     }
-  }), [agentState, filters, flags, testOverrides, toast, say, patchAgent])
+  }), [agentState, filters, flags, testOverrides, toast, say, patchAgent, patchDraft])
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }

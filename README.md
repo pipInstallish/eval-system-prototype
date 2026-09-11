@@ -31,11 +31,14 @@ call, flag, mark as test). The drawer links to the full call page for the transc
 Analytics shows one table of evals that failed, sorted by most failed or most recent.
 Zero tolerance evals sit on top whatever the sort, because any single failure is flagged.
 
-One eval set is published at a time, tied to one agent prompt version, shown in the banner
-as "Running on sarvam-rcb-...". A published set cannot be edited. To change it: Unpublish,
-edit the evals or pick a different prompt version, then Publish. The publish dialog states
-which prompt the evals will run against from tonight, and says so more loudly when the
-prompt version changed. Older versions stay in the dropdown, read only.
+One eval set is live at a time, paired with one agent prompt version. A live set is never
+edited. To change anything you start a **new eval set**, which is its own draft: copy the live
+set or start empty, then add evals, import a CSV or JSON file, and pick the prompt version.
+The live set keeps running the whole time. Publishing the draft makes it the next version and
+retires the current one to history, where it keeps the evals it actually ran with.
+
+Stopping evals is a separate action from drafting. It pauses the nightly job without touching
+the live set.
 
 Acceptance criteria are a list, not a paragraph. Add or remove boxes in the form; a failing
 call shows every criterion it broke as a tile on the evidence page.

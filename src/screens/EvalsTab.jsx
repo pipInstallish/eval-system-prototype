@@ -451,11 +451,49 @@ function ImportEvals ({ format, onClose, onAdd, onReplace, currentCount, say }) 
   )
 }
 
+/* ── new set ──────────────────────────────────────────── */
+function NewSet ({ state, onClose, onCreate }) {
+  const [from, setFrom] = useState('copy')
+  const live = state.currentVersionId
+  return (
+    <Drawer
+      title="New eval set"
+      sub={`The live set ${live} keeps running until you publish this one.`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => { onCreate(from); onClose() }}>Create draft</button>
+        </>
+      }
+    >
+      <div className="choice-list">
+        <label className="choice">
+          <input type="radio" name="new-from" checked={from === 'copy'} onChange={() => setFrom('copy')} />
+          <span>
+            <span className="choice-title">Copy the live set</span>
+            <span className="choice-sub">Starts with the {state.liveEvals.length} evals in {live}. Edit from there.</span>
+          </span>
+        </label>
+        <label className="choice">
+          <input type="radio" name="new-from" checked={from === 'empty'} onChange={() => setFrom('empty')} />
+          <span>
+            <span className="choice-title">Start empty</span>
+            <span className="choice-sub">Build from nothing, or import a CSV or JSON file.</span>
+          </span>
+        </label>
+      </div>
+    </Drawer>
+  )
+}
+
 /* ── publish ───────────────────────────────────────────── */
-function Publish ({ base, state, drafts, onClose, onPublish }) {
-  const [pv, setPv] = useState(state.promptVersion)
+function Publish ({ base, state, onClose, onPublish, onPromptVersion }) {
+  const draft = state.draft
+  const pv = draft.promptVersion
+  const setPv = onPromptVersion
   const next = `v${state.versions.length + 1}`
-  const wasOn = state.versions[0].promptVersion
+  const wasOn = state.promptVersion
   const changed = pv !== wasOn
   return (
     <Drawer
@@ -465,7 +503,14 @@ function Publish ({ base, state, drafts, onClose, onPublish }) {
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={() => { onPublish(pv); onClose() }}>Publish {next}</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={draft.evals.length === 0}
+            onClick={() => { onPublish(); onClose() }}
+          >
+            Publish {next}
+          </button>
         </>
       }
     >
@@ -482,23 +527,14 @@ function Publish ({ base, state, drafts, onClose, onPublish }) {
           </select>
         </div>
         <div className="def-list">
-          <div className="def-row"><div className="def-key">Evals in this set</div><div className="def-val"><span className="n-sm">{state.evals.length}</span></div></div>
-          <div className="def-row"><div className="def-key">New or changed</div><div className="def-val"><span className="n-sm">{drafts.length}</span></div></div>
+          <div className="def-row"><div className="def-key">Evals in {next}</div><div className="def-val"><span className="n-sm">{draft.evals.length}</span></div></div>
+          <div className="def-row"><div className="def-key">Replaces</div><div className="def-val">{state.currentVersionId}, with {state.liveEvals.length} evals</div></div>
           <div className="def-row"><div className="def-key">First run</div><div className="def-val">Tonight, after midnight</div></div>
         </div>
-        {drafts.length > 0 && (
-          <div>
-            <label className="form-label">Drafts</label>
-            <ul className="eval-mini">
-              {drafts.map(d => (
-                <li className="eval-mini-row" key={d.key}>
-                  <span className="eval-mini-name mono truncate">{d.name}</span>
-                  <Severity severity={d.severity} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div>
+          <label className="form-label">{state.currentVersionId} stays in history</label>
+          <p className="cell-sub">Its results and evidence are not touched.</p>
+        </div>
       </div>
     </Drawer>
   )
@@ -512,132 +548,137 @@ export default function EvalsTab () {
   const store = useStore()
   const [drawer, setDrawer] = useState(null)
 
-  const viewing = sp.get('version')
-  const current = state.versions[0]
-  const readOnly = viewing && viewing !== state.currentVersionId
-  const shownVersion = readOnly ? state.versions.find(v => v.id === viewing) : current
+  const draft = state.draft
+  const liveId = state.currentVersionId
+  const nextId = `v${state.versions.length + 1}`
 
-  const drafts = state.evals.filter(ev => ev.status === 'draft')
-  const evals = readOnly ? state.evals.slice(0, shownVersion ? shownVersion.evalCount : 0) : state.evals
+  // one selector for everything: the draft, the live set, and older sets
+  const viewing = sp.get('set') || (draft ? 'draft' : liveId)
+  const onDraft = viewing === 'draft' && !!draft
+  const onLive = viewing === liveId
+  const history = !onDraft && !onLive ? state.versions.find(v => v.id === viewing) : null
 
-  const setVersion = id => {
-    if (id === state.currentVersionId) setSp({}, { replace: true })
-    else setSp({ version: id }, { replace: true })
-  }
+  const shown = state.versions.find(v => v.id === viewing)
+  const evals = onDraft ? draft.evals : (shown ? shown.evals : [])
+
+  const setView = id => setSp(id === (draft ? 'draft' : liveId) ? {} : { set: id }, { replace: true })
 
   return (
     <>
       <div className="banner">
         <div className="banner-left">
-          <select
-            className="select"
-            aria-label="Version"
-            value={shownVersion ? shownVersion.id : state.currentVersionId}
-            onChange={e => setVersion(e.target.value)}
-          >
+          <select className="select" aria-label="Eval set" value={viewing} onChange={e => setView(e.target.value)}>
+            {draft && <option value="draft">{nextId} — draft</option>}
             {state.versions.map(v => (
               <option key={v.id} value={v.id}>
-                {v.label}{v.id === state.currentVersionId ? (state.published ? ' — published' : ' — last published') : ''}
+                {v.label}{v.id === liveId ? (state.running ? ' — live' : ' — live, stopped') : ''}
               </option>
             ))}
           </select>
 
-          {!readOnly && (
-            <span className={`pill ${state.published ? 'pill-live' : 'pill-draft'}`}>
-              {state.published ? 'Published' : 'Not published'}
-            </span>
-          )}
-
-          <span className="banner-meta">
-            {shownVersion.publishedOn} by {shownVersion.publishedBy}
-          </span>
-
-          {readOnly ? (
+          {onDraft ? (
             <>
-              <span className="banner-meta mono">{shownVersion.promptVersion}</span>
+              <span className="pill pill-draft">Not published</span>
+              <span className="banner-meta">
+                {draft.basedOn ? `Copied from ${draft.basedOn}` : 'Started empty'}
+              </span>
+              <span className="field">
+                <label className="field-label" htmlFor="pv-select">Prompt version</label>
+                <select
+                  id="pv-select"
+                  className="select"
+                  value={draft.promptVersion}
+                  onChange={e => store.setDraftPromptVersion(agentId, e.target.value)}
+                >
+                  {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </span>
+            </>
+          ) : onLive ? (
+            <>
+              <span className={`pill ${state.running ? 'pill-live' : 'pill-draft'}`}>
+                {state.running ? 'Live' : 'Stopped'}
+              </span>
+              <span className="banner-meta">{state.versions[0].publishedOn} by {state.versions[0].publishedBy}</span>
+              <span className="banner-meta">Running on <span className="mono">{state.promptVersion}</span></span>
+            </>
+          ) : (
+            <>
+              <span className="banner-meta">{history ? `${history.publishedOn} by ${history.publishedBy}` : ''}</span>
+              <span className="banner-meta mono">{history ? history.promptVersion : ''}</span>
               <span className="banner-readonly">Read only</span>
             </>
-          ) : state.published ? (
-            <span className="banner-meta">Running on <span className="mono">{state.promptVersion}</span></span>
-          ) : (
-            <span className="field">
-              <label className="field-label" htmlFor="pv-select">Prompt version</label>
-              <select
-                id="pv-select"
-                className="select"
-                value={state.promptVersion}
-                onChange={e => store.setPromptVersion(agentId, e.target.value)}
-              >
-                {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </span>
           )}
         </div>
 
-        {!readOnly && (
-          <div className="btn-row">
-            {state.published ? (
-              <button type="button" className="btn" onClick={() => store.unpublish(agentId)}>Unpublish</button>
-            ) : (
-              <>
-                <button type="button" className="btn" onClick={() => setDrawer('csv')}>Import CSV</button>
-                <button type="button" className="btn" onClick={() => setDrawer('json')}>Import JSON</button>
-                <button type="button" className="btn" onClick={() => setDrawer('add')}>Add eval</button>
-                <button type="button" className="btn btn-primary" onClick={() => setDrawer('publish')}>
-                  Publish v{state.versions.length + 1}
-                </button>
-              </>
-            )}
-          </div>
+        <div className="btn-row">
+          {onDraft && (
+            <>
+              <button type="button" className="btn" onClick={() => setDrawer('csv')}>Import CSV</button>
+              <button type="button" className="btn" onClick={() => setDrawer('json')}>Import JSON</button>
+              <button type="button" className="btn" onClick={() => setDrawer('add')}>Add eval</button>
+              <button type="button" className="btn" onClick={() => { store.discardDraft(agentId); setSp({}, { replace: true }) }}>Discard</button>
+              <button type="button" className="btn btn-primary" onClick={() => setDrawer('publish')}>Publish {nextId}</button>
+            </>
+          )}
+          {onLive && (
+            <>
+              {state.running
+                ? <button type="button" className="btn" onClick={() => store.stopRunning(agentId)}>Stop evals</button>
+                : <button type="button" className="btn" onClick={() => store.startRunning(agentId)}>Start evals</button>}
+              {!draft && <button type="button" className="btn btn-primary" onClick={() => setDrawer('new')}>New eval set</button>}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ paddingTop: 'var(--s4)' }}>
+        {onDraft ? (
+          <Notice warn>
+            This set is not running. {liveId} keeps running until you publish {nextId}.
+          </Notice>
+        ) : onLive ? (
+          state.running ? (
+            <Notice>
+              {liveId} runs every night. Published sets cannot be changed. Start a new set to make changes.
+            </Notice>
+          ) : (
+            <Notice warn>Evals are stopped. {liveId} is still the live set, but nothing runs tonight.</Notice>
+          )
+        ) : (
+          <Notice>An older set, kept for the results it produced.</Notice>
         )}
       </div>
 
-      {!readOnly && (
-        <div style={{ paddingTop: 'var(--s4)' }}>
-          {state.published ? (
-            <Notice>Published sets cannot be changed. Unpublish to edit the evals or move to another prompt version.</Notice>
-          ) : (
-            <Notice warn>Nothing runs tonight. Publish to start this set.</Notice>
-          )}
-        </div>
-      )}
-
-      {drafts.length > 0 && !readOnly && !state.published && (
-        <div style={{ paddingTop: 'var(--s4)' }}>
-          <Notice warn>
-            {drafts.length === 1 ? '1 eval is a draft. It starts' : `${drafts.length} evals are drafts. They start`} running after you publish v{state.versions.length + 1}.
-          </Notice>
-        </div>
-      )}
-
       <Section
-        title={readOnly ? `Evals in ${shownVersion.id}` : state.published ? `Evals in ${state.currentVersionId}` : 'Evals — draft'}
-        note={drafts.length && !readOnly
-          ? `${evals.length - drafts.length} live, ${drafts.length} draft`
-          : `${evals.length} total`}
+        title={onDraft ? `Evals in ${nextId}` : `Evals in ${viewing}`}
+        note={`${evals.length} total`}
       >
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: '70%' }}>Eval</th>
-                <th style={{ width: '30%' }}>Severity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evals.map(ev => (
-                <tr key={ev.key}>
-                  <td>
-                    <span className="row-name mono">{ev.name}</span>
-                    {ev.status === 'draft' && <span className="tag tag-flag" style={{ marginLeft: 10 }}>Draft</span>}
-                  </td>
-                  <td><Severity severity={ev.severity} /></td>
+        {evals.length === 0 ? (
+          <Empty
+            title={onDraft ? 'No evals in this set yet.' : 'No evals in this version.'}
+            body={onDraft ? 'Add one, or import a CSV or JSON file.' : null}
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: '70%' }}>Eval</th>
+                  <th style={{ width: '30%' }}>Severity</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {evals.length === 0 && <Empty title="No evals in this version." />}
+              </thead>
+              <tbody>
+                {evals.map(ev => (
+                  <tr key={ev.key}>
+                    <td><span className="row-name mono">{ev.name}</span></td>
+                    <td><Severity severity={ev.severity} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Section>
 
       <Section title="Run rules">
@@ -645,11 +686,7 @@ export default function EvalsTab () {
           <div className="def-row">
             <div className="def-key">Evals</div>
             <div className="def-val">
-              <Toggle
-                on={state.evalsOn}
-                onChange={v => store.setEvalsOn(agentId, v)}
-                label={state.evalsOn ? 'On' : 'Off'}
-              />
+              <Toggle on={state.evalsOn} onChange={v => store.setEvalsOn(agentId, v)} label={state.evalsOn ? 'On' : 'Off'} />
             </div>
           </div>
           <div className="def-row">
@@ -690,24 +727,31 @@ export default function EvalsTab () {
         </div>
       </Section>
 
+      {drawer === 'new' && (
+        <NewSet
+          state={state}
+          onClose={() => setDrawer(null)}
+          onCreate={from => { store.newDraft(agentId, from); setSp({}, { replace: true }) }}
+        />
+      )}
       {drawer === 'add' && <AddEval onClose={() => setDrawer(null)} onSave={d => store.addEval(agentId, d)} say={store.say} />}
       {(drawer === 'csv' || drawer === 'json') && (
         <ImportEvals
           format={drawer}
           onClose={() => setDrawer(null)}
-          currentCount={state.evals.length}
+          currentCount={draft ? draft.evals.length : 0}
           say={store.say}
           onAdd={rows => store.addBulk(agentId, rows)}
           onReplace={rows => store.replaceEvals(agentId, rows)}
         />
       )}
-      {drawer === 'publish' && (
+      {drawer === 'publish' && draft && (
         <Publish
           base={base}
           state={state}
-          drafts={drafts}
           onClose={() => setDrawer(null)}
-          onPublish={pv => { store.publish(agentId, pv); setSp({}, { replace: true }) }}
+          onPromptVersion={pv => store.setDraftPromptVersion(agentId, pv)}
+          onPublish={() => { store.publish(agentId); setSp({}, { replace: true }) }}
         />
       )}
     </>

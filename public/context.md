@@ -138,7 +138,7 @@ Output a fenced `json` block: a list of objects, one per eval.
 - `acceptance_criteria` is a list. Each entry is one condition and starts with "Pass if".
 - Escape line breaks inside `judge_prompt` as `\n`.
 
-Tell the user to paste it under Evals, Import JSON.
+Tell the user to paste it under Evals: start a new eval set, then Import JSON.
 
 ### CSV
 
@@ -157,7 +157,7 @@ Rules for the CSV:
 - Keep line breaks inside the judge prompt as `\n`
 - One row per eval. Write as many rows as the user has evals.
 
-Tell the user to save it as a `.csv` file and upload it under Evals, Import CSV.
+Tell the user to save it as a `.csv` file, start a new eval set under Evals, then Import CSV.
 
 ---
 
