@@ -43,12 +43,17 @@ export function Store ({ children }) {
   const [toast, setToast] = useState(null)
   const timer = useRef(null)
 
-  useEffect(() => () => clearTimeout(timer.current), [])
+  const leaving = useRef(null)
 
+  useEffect(() => () => { clearTimeout(timer.current); clearTimeout(leaving.current) }, [])
   const say = useCallback(msg => {
-    setToast(msg)
+    setToast({ text: msg, leaving: false })
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => setToast(null), 3600)
+    clearTimeout(leaving.current)
+    timer.current = setTimeout(() => {
+      setToast(t => (t ? { ...t, leaving: true } : null))
+      leaving.current = setTimeout(() => setToast(null), 220)
+    }, 3400)
   }, [])
 
   const patchAgent = useCallback((id, patch) => {

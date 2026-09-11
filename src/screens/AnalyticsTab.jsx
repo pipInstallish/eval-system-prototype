@@ -83,9 +83,12 @@ export default function AnalyticsTab () {
     { label: 'Zero tolerance', value: agg.zeroFired === 0 ? '0 calls' : `${agg.zeroFired} calls`, flag: agg.zeroFired > 0 }
   ]
 
+  const sig = `${filters.range}|${filters.batch}|${filters.source}|${filters.excludeTest}`
+
   return (
     <>
       <Filters agentId={agentId} />
+      <div className="soft-enter" key={sig}>
       <Strip items={strip} />
 
       <Section
@@ -127,6 +130,7 @@ export default function AnalyticsTab () {
           Set {state.currentVersionId} against prompt {state.promptVersion}. Calls shorter than{' '}
           {state.runRules.minDuration >= 120 ? `${state.runRules.minDuration / 60} minutes` : `${state.runRules.minDuration} seconds`} are not evaluated.
         </Notice>
+      </div>
       </div>
     </>
   )

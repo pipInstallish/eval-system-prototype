@@ -44,11 +44,16 @@ function Rail () {
 
 export default function App () {
   const { toast } = useStore()
+  const loc = useLocation()
+  // tabs animate on their own, so they should not re-trigger the page transition
+  const group = loc.pathname.replace(/\/(configuration|evals|analytics)$/, '')
+
   return (
     <div className="shell">
       <Rail />
       <main className="main">
-        <Routes>
+        <div className="route-enter" key={group}>
+        <Routes location={loc}>
           <Route path="/" element={<Navigate to="/agents" replace />} />
           <Route path="/agents" element={<AgentsList />} />
           <Route path="/agents/:agentId" element={<AgentDetail />}>
@@ -64,8 +69,11 @@ export default function App () {
           <Route path="/agents/:agentId/calls/:callId" element={<CallDetail />} />
           <Route path="*" element={<Navigate to="/agents" replace />} />
         </Routes>
+        </div>
       </main>
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <div className={`toast${toast.leaving ? ' is-leaving' : ''}`} role="status">{toast.text}</div>
+      )}
     </div>
   )
 }

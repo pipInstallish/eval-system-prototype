@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { SEVERITY_LABEL } from '../data/catalogue.js'
 
 /* ── numbers ───────────────────────────────────────────── */
@@ -90,6 +90,20 @@ export function Section ({ title, note, right, children, tight }) {
 }
 
 export function Disclosure ({ title, note, open, onToggle, children }) {
+  const inner = useRef(null)
+  const [height, setHeight] = useState(0)
+
+  // the content changes as filters and sorting change, so keep measuring it
+  useLayoutEffect(() => {
+    const el = inner.current
+    if (!el) return
+    setHeight(el.scrollHeight)
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setHeight(el.scrollHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
     <section className="section">
       <div className="section-head">
@@ -98,7 +112,11 @@ export function Disclosure ({ title, note, open, onToggle, children }) {
         </button>
         {note && <span className="section-note">{note}</span>}
       </div>
-      {open && <div className="section-body">{children}</div>}
+      <div className="collapse" data-open={open} aria-hidden={!open} style={{ height: open ? height : 0 }}>
+        <div ref={inner}>
+          <div className="section-body">{children}</div>
+        </div>
+      </div>
     </section>
   )
 }
@@ -132,7 +150,7 @@ export function Notice ({ children, warn }) {
 }
 
 /* ── drawer ────────────────────────────────────────────── */
-export function Drawer ({ title, sub, onClose, footer, wide, children }) {
+export function Drawer ({ title, sub, onClose, footer, wide, closing, children }) {
   const ref = useRef(null)
   useEffect(() => {
     const el = ref.current
@@ -145,8 +163,14 @@ export function Drawer ({ title, sub, onClose, footer, wide, children }) {
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <aside className={`drawer${wide ? ' drawer-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
+      <div className={`scrim${closing ? ' is-closing' : ''}`} onClick={onClose} />
+      <aside
+        className={`drawer${wide ? ' drawer-wide' : ''}${closing ? ' is-closing' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        ref={ref}
+      >
         <div className="drawer-head">
           <div>
             <div className="drawer-title">{title}</div>

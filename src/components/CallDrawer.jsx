@@ -5,7 +5,7 @@ import { callResults, fmtDur, fmtDate, isTest, FAIL } from '../data/universe.js'
 import { BATCHES } from '../data/catalogue.js'
 import { Drawer, Verdict } from './ui.jsx'
 
-export default function CallDrawer ({ agent, call, ev, reason, onClose }) {
+export default function CallDrawer ({ agent, call, ev, reason, onClose, closing }) {
   const store = useStore()
   const [reasonText, setReasonText] = useState('')
   const [asking, setAsking] = useState(false)
@@ -21,6 +21,7 @@ export default function CallDrawer ({ agent, call, ev, reason, onClose }) {
     <Drawer
       title={call.leadName}
       sub={`${fmtDate(call.date)}, ${fmtDur(call.durationSec)}`}
+      closing={closing}
       onClose={onClose}
       footer={
         <>

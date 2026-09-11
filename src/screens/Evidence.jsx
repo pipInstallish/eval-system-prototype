@@ -13,6 +13,11 @@ export default function Evidence () {
   const { base } = useAgent(agentId)
   const { testOverrides, filters, say } = useStore()
   const [openCall, setOpenCall] = useState(null)
+  const [closing, setClosing] = useState(false)
+  const closeCall = () => {
+    setClosing(true)
+    setTimeout(() => { setOpenCall(null); setClosing(false) }, 170)
+  }
 
   const batchParam = sp.get('batch')
   const rangeParam = sp.get('range')
@@ -190,7 +195,8 @@ export default function Evidence () {
           call={openCall.call}
           ev={ev}
           reason={openCall.reason}
-          onClose={() => setOpenCall(null)}
+          closing={closing}
+          onClose={closeCall}
         />
       )}
     </div>

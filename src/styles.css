@@ -737,3 +737,88 @@ input, select, textarea { background: var(--ground); }
   gap: var(--s4);
   padding: var(--s6) 0 var(--s4);
 }
+
+/* ── motion ─────────────────────────────────────────────── */
+:root {
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --fast: 120ms;
+  --mid: 190ms;
+  --slow: 240ms;
+}
+
+.btn, .btn-quiet, .icon-btn, .disclose, .tab, .rail-item,
+.select, .input, .textarea, .toggle-track, .choice, .th-sort,
+.player-btn, .var-chip, .crumb a, .eval-mini-row .btn-quiet {
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    opacity var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.btn:active:not(:disabled),
+.icon-btn:active,
+.player-btn:active,
+.disclose:active { transform: translateY(1px); }
+
+.btn-primary:active:not(:disabled) { transform: translateY(1px); }
+
+.select:focus, .input:focus, .textarea:focus { border-color: var(--ink-3); }
+
+.row-link { transition: background-color var(--fast) var(--ease); }
+.row-link:hover { background: var(--wash); }
+.row-link:active { background: #f7f7f6; }
+
+.choice:hover { background: var(--wash); }
+
+/* page and tab transitions */
+@keyframes enter-y {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes enter-soft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.route-enter { animation: enter-y var(--mid) var(--ease) both; }
+.soft-enter { animation: enter-soft var(--mid) var(--ease) both; }
+
+/* sliding tab indicator */
+.tabs { position: relative; }
+.tab, .tab.is-active { border-bottom-color: transparent; }
+.tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: transform var(--slow) var(--ease), width var(--slow) var(--ease);
+  pointer-events: none;
+}
+.tab-indicator[data-ready="false"] { transition: none; }
+
+/* expand and collapse */
+.collapse {
+  overflow: hidden;
+  opacity: 0;
+  transition: height var(--slow) var(--ease), opacity var(--mid) var(--ease);
+}
+.collapse[data-open="true"] { opacity: 1; }
+
+/* drawer exit */
+.drawer.is-closing { animation: drawer-out 170ms var(--ease) both; }
+@keyframes drawer-out { to { transform: translateX(18px); opacity: 0; } }
+.scrim.is-closing { animation: fade-out 170ms var(--ease) both; }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* toast exit */
+.toast.is-leaving { animation: toast-out 220ms var(--ease) both; }
+@keyframes toast-out { to { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* progress bar easing already set; make the fill feel continuous */
+.progress-fill { transition: width var(--slow) linear; }
+
+/* a collapsed section must not be reachable by keyboard */
+.collapse[data-open="false"] { visibility: hidden; }
+.collapse[data-open="true"] { visibility: visible; }

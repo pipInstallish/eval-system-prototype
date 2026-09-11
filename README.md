@@ -73,6 +73,12 @@ Pass and fail are shares of the calls where the eval applied. Unknown is a share
 evaluated calls. An eval is below baseline when its pass rate is under its baseline.
 Zero tolerance evals are counted, never shown as a rate.
 
+## Motion
+
+Short and functional: 120ms on controls, 190ms on page and tab changes, 240ms on the tab
+underline and on expanding sections. Drawers animate both in and out. Everything is switched
+off under `prefers-reduced-motion`.
+
 ## Not built
 
 Sampling controls, re-running evals, comparing prompt versions, editing published evals,

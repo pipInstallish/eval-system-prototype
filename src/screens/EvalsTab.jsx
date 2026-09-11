@@ -72,7 +72,7 @@ const SCORING = [
 
 const isNumeric = id => id === 'score_5' || id === 'score_10'
 
-function AddEval ({ onClose, onSave, say }) {
+function AddEval ({ closing, onClose, onSave, say }) {
   const [d, setD] = useState(EMPTY)
   const [showExample, setShowExample] = useState(false)
   const set = (k, v) => setD(s => ({ ...s, [k]: v }))
@@ -89,8 +89,9 @@ function AddEval ({ onClose, onSave, say }) {
   return (
     <Drawer
       title="Add eval"
-      sub="Saved as a draft. It goes live on the next publish."
+      sub="It goes live when you publish this set."
       wide
+      closing={closing}
       onClose={onClose}
       footer={
         <>
@@ -267,7 +268,7 @@ const CSV_ROWS = [
   { key: 'no_number_read_incorrectly', name: 'no_number_read_incorrectly', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where the agent reads a number aloud.', prompt: 'Fail if a phone number, date or time is read differently from the input variable.', criteria: ['Pass if every number matches the input variables'], status: 'draft' }
 ]
 
-function ImportEvals ({ format, onClose, onAdd, onReplace, currentCount, say }) {
+function ImportEvals ({ closing, format, onClose, onAdd, onReplace, currentCount, say }) {
   const isJson = format === 'json'
   const [stage, setStage] = useState('pick')
   const [progress, setProgress] = useState(0)
@@ -305,6 +306,7 @@ function ImportEvals ({ format, onClose, onAdd, onReplace, currentCount, say }) 
       title={isJson ? 'Import JSON' : 'Import CSV'}
       sub={isJson ? 'A list of evals.' : 'One eval per row.'}
       wide
+      closing={closing}
       onClose={onClose}
       footer={
         stage === 'done'
@@ -452,13 +454,14 @@ function ImportEvals ({ format, onClose, onAdd, onReplace, currentCount, say }) 
 }
 
 /* ── new set ──────────────────────────────────────────── */
-function NewSet ({ state, onClose, onCreate }) {
+function NewSet ({ closing, state, onClose, onCreate }) {
   const [from, setFrom] = useState('copy')
   const live = state.currentVersionId
   return (
     <Drawer
       title="New eval set"
       sub={`The live set ${live} keeps running until you publish this one.`}
+      closing={closing}
       onClose={onClose}
       footer={
         <>
@@ -488,7 +491,7 @@ function NewSet ({ state, onClose, onCreate }) {
 }
 
 /* ── publish ───────────────────────────────────────────── */
-function Publish ({ base, state, onClose, onPublish, onPromptVersion }) {
+function Publish ({ closing, base, state, onClose, onPublish, onPromptVersion }) {
   const draft = state.draft
   const pv = draft.promptVersion
   const setPv = onPromptVersion
@@ -499,6 +502,7 @@ function Publish ({ base, state, onClose, onPublish, onPromptVersion }) {
     <Drawer
       title={`Publish ${next}`}
       sub="Published sets cannot be edited later."
+      closing={closing}
       onClose={onClose}
       footer={
         <>
@@ -547,6 +551,11 @@ export default function EvalsTab () {
   const [sp, setSp] = useSearchParams()
   const store = useStore()
   const [drawer, setDrawer] = useState(null)
+  const [closing, setClosing] = useState(false)
+  const closeDrawer = () => {
+    setClosing(true)
+    setTimeout(() => { setDrawer(null); setClosing(false) }, 170)
+  }
 
   const draft = state.draft
   const liveId = state.currentVersionId
@@ -658,6 +667,7 @@ export default function EvalsTab () {
         title={onDraft ? `Evals in ${nextId}` : `Evals in ${viewing}`}
         note={`${evals.length} total`}
       >
+        <div className="soft-enter" key={viewing}>
         {evals.length === 0 ? (
           <Empty
             title={onDraft ? 'No evals in this set yet.' : 'No evals in this version.'}
@@ -683,6 +693,7 @@ export default function EvalsTab () {
             </table>
           </div>
         )}
+        </div>
       </Section>
 
       <Section title="Run rules">
@@ -727,16 +738,20 @@ export default function EvalsTab () {
 
       {drawer === 'new' && (
         <NewSet
+          closing={closing}
           state={state}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           onCreate={from => { store.newDraft(agentId, from); setSp({}, { replace: true }) }}
         />
       )}
-      {drawer === 'add' && <AddEval onClose={() => setDrawer(null)} onSave={d => store.addEval(agentId, d)} say={store.say} />}
+      {drawer === 'add' && (
+        <AddEval closing={closing} onClose={closeDrawer} onSave={d => store.addEval(agentId, d)} say={store.say} />
+      )}
       {(drawer === 'csv' || drawer === 'json') && (
         <ImportEvals
+          closing={closing}
           format={drawer}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           currentCount={draft ? draft.evals.length : 0}
           say={store.say}
           onAdd={rows => store.addBulk(agentId, rows)}
@@ -745,9 +760,10 @@ export default function EvalsTab () {
       )}
       {drawer === 'publish' && draft && (
         <Publish
+          closing={closing}
           base={base}
           state={state}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           onPromptVersion={pv => store.setDraftPromptVersion(agentId, pv)}
           onPublish={() => { store.publish(agentId); setSp({}, { replace: true }) }}
         />
