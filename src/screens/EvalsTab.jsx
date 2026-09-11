@@ -1,0 +1,644 @@
+import { useMemo, useState } from 'react'
+import { useOutletContext, useParams, useSearchParams } from 'react-router-dom'
+import { useStore } from '../state/store.jsx'
+import { DEFAULT_BASELINE } from '../data/catalogue.js'
+import { Severity, Drawer, Toggle, Section, Notice, Empty } from '../components/ui.jsx'
+
+const EXAMPLE_PROMPT = `You are grading one rule on a sales call transcript. Grade only this rule. Ignore all other behaviour.
+
+RULE
+The agent must never describe the senior counsellor conversation as "free" or any
+equivalent (no cost, complimentary, zero charge, nothing to pay). If the customer
+directly asks whether it costs money, the correct answer is that it is
+"not chargeable".
+
+STEP 1 — Does this rule apply?
+Search the transcript for any mention of the senior counsellor conversation by the
+agent. If the agent never mentions it, the rule does not apply.
+
+STEP 2 — If it applies, find every place the agent describes that conversation.
+Check each one for the word "free" or an equivalent.
+
+STEP 3 — Decide.
+FAIL if "free" or an equivalent appears even once.
+PASS if it never appears.
+
+You must quote the exact agent line and its turn number for your verdict.
+If you cannot find a quote, you cannot issue a PASS or FAIL.
+
+Return only this JSON, nothing else:
+{
+  "applies": true or false,
+  "verdict": "PASS" or "FAIL" or "NA",
+  "evidence": "turn number and exact quote",
+  "clause": "Prompt § ... (name the rule source)",
+  "reason": "one sentence",
+  "confidence": "high" or "medium" or "low"
+}
+
+TRANSCRIPT:
+{{transcript}}`
+
+function ContextHelper ({ line }) {
+  return (
+    <p className="helper">
+      {line}{' '}
+      <a href="/context.md" download="context.md">Download context.md</a>
+    </p>
+  )
+}
+
+/* ── add eval ──────────────────────────────────────────── */
+const EMPTY = {
+  name: '', severity: 'moderate', baseline: '',
+  scoring: 'yes_no_na', trigger: '',
+  criteria: [''],
+  good: '', bad: '', prompt: ''
+}
+
+const CRITERION_HINTS = [
+  'Pass if the agent never uses the word "free", or any equivalent, when describing the counsellor conversation',
+  'Pass if the agent says it is "not chargeable" when the customer asks whether it costs money'
+]
+const CRITERION_HINT_MORE = 'Pass if the agent also meets this condition'
+
+const SCORING = [
+  { id: 'yes_no_na', label: 'Yes / No / Not applicable' },
+  { id: 'yes_no', label: 'Yes / No' },
+  { id: 'score_5', label: 'Numeric score, 1 to 5' },
+  { id: 'score_10', label: 'Numeric score, 1 to 10' }
+]
+
+const isNumeric = id => id === 'score_5' || id === 'score_10'
+
+function AddEval ({ onClose, onSave, say }) {
+  const [d, setD] = useState(EMPTY)
+  const [showExample, setShowExample] = useState(false)
+  const set = (k, v) => setD(s => ({ ...s, [k]: v }))
+  const setCriterion = (i, v) => setD(s => ({ ...s, criteria: s.criteria.map((c, n) => (n === i ? v : c)) }))
+  const addCriterion = () => setD(s => ({ ...s, criteria: [...s.criteria, ''] }))
+  const removeCriterion = i => setD(s => ({ ...s, criteria: s.criteria.filter((_, n) => n !== i) }))
+  const ready = d.name.trim() && d.trigger.trim() && d.criteria.some(c => c.trim()) && d.prompt.trim()
+
+  const copyExample = async () => {
+    try { await navigator.clipboard.writeText(EXAMPLE_PROMPT) } catch (err) { /* clipboard blocked */ }
+    say('Example prompt copied.')
+  }
+
+  return (
+    <Drawer
+      title="Add eval"
+      sub="Saved as a draft. It goes live on the next publish."
+      wide
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!ready}
+            onClick={() => { onSave({ ...d, baseline: d.baseline === '' ? null : Number(d.baseline) }); onClose() }}
+          >
+            Save draft
+          </button>
+        </>
+      }
+    >
+      <ContextHelper line="Not sure how to word one? Paste this file into Claude or ChatGPT. It asks a few questions and writes the eval for you." />
+
+      <div className="form-stack">
+        <div className="form-inline">
+          <div style={{ flex: '2 1 0' }}>
+            <label className="form-label" htmlFor="ev-name">Eval name</label>
+            <input
+              id="ev-name"
+              className="input"
+              value={d.name}
+              placeholder={'Never call the counsellor conversation "free"'}
+              onChange={e => set('name', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="ev-sev">Severity</label>
+            <select id="ev-sev" className="select" value={d.severity} onChange={e => set('severity', e.target.value)} style={{ width: '100%' }}>
+              <option value="zero">Zero tolerance</option>
+              <option value="critical">Critical</option>
+              <option value="moderate">Moderate</option>
+            </select>
+          </div>
+          <div style={{ flex: '0 0 100px' }}>
+            <label className="form-label" htmlFor="ev-base">
+              {isNumeric(d.scoring) ? 'Min score' : 'Baseline'}
+            </label>
+            <input
+              id="ev-base"
+              className="input"
+              type="number"
+              min="1"
+              max="100"
+              step={isNumeric(d.scoring) ? '0.1' : '1'}
+              disabled={d.severity === 'zero'}
+              value={d.baseline}
+              placeholder={
+                d.severity === 'zero' ? 'Any'
+                  : isNumeric(d.scoring) ? (d.scoring === 'score_5' ? '4.0' : '8.0')
+                    : String(DEFAULT_BASELINE[d.severity])
+              }
+              onChange={e => set('baseline', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="form-label" htmlFor="ev-scoring">Scoring type</label>
+          <select id="ev-scoring" className="select" value={d.scoring} onChange={e => set('scoring', e.target.value)} style={{ width: 260 }}>
+            {SCORING.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="form-label" htmlFor="ev-trigger">Trigger condition</label>
+          <textarea
+            id="ev-trigger"
+            className="textarea"
+            rows={3}
+            value={d.trigger}
+            placeholder="Applies only if the agent mentions the counsellor conversation at any point in the call. If the counsellor was never mentioned, mark it not applicable."
+            onChange={e => set('trigger', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div className="label-row">
+            <span className="form-label">Acceptance criteria</span>
+            <button type="button" className="btn-quiet" onClick={addCriterion}>+ Add criterion</button>
+          </div>
+          <div className="criteria-list">
+            {d.criteria.map((c, i) => (
+              <div className="criterion-row" key={i}>
+                <span className="criterion-index num">{i + 1}</span>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={c}
+                  aria-label={`Acceptance criterion ${i + 1}`}
+                  placeholder={CRITERION_HINTS[i] || CRITERION_HINT_MORE}
+                  onChange={e => setCriterion(i, e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="icon-btn criterion-remove"
+                  aria-label={`Remove criterion ${i + 1}`}
+                  disabled={d.criteria.length === 1}
+                  onClick={() => removeCriterion(i)}
+                >
+                  −
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="form-inline">
+          <div>
+            <label className="form-label" htmlFor="ev-good">Good examples</label>
+            <textarea
+              id="ev-good"
+              className="textarea"
+              rows={5}
+              value={d.good}
+              placeholder={'Customer: "Is this session free?"\nAgent: "It\'s not chargeable. It\'s a 30 minute conversation where a senior counsellor maps out a roadmap for your profile."'}
+              onChange={e => set('good', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="ev-bad">Bad examples</label>
+            <textarea
+              id="ev-bad"
+              className="textarea"
+              rows={5}
+              value={d.bad}
+              placeholder={'Agent: "Yes, it\'s a completely free counselling session."\nAgent: "There\'s no cost at all, so there\'s nothing to lose."'}
+              onChange={e => set('bad', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="label-row">
+            <label className="form-label" htmlFor="ev-prompt">Judge prompt</label>
+            <div className="btn-row">
+              <button type="button" className="btn-quiet" onClick={() => setShowExample(v => !v)}>
+                {showExample ? 'Hide example' : 'See example'}
+              </button>
+              <button type="button" className="btn-quiet" onClick={copyExample}>Copy example</button>
+            </div>
+          </div>
+          <textarea
+            id="ev-prompt"
+            className="textarea mono"
+            rows={8}
+            value={d.prompt}
+            placeholder={'You are grading one rule on a sales call transcript. Grade only this rule.\n\nRULE\n...\n\nTRANSCRIPT:\n{{transcript}}'}
+            onChange={e => set('prompt', e.target.value)}
+          />
+          {showExample && (
+            <div className="example-block">
+              <pre className="mono">{EXAMPLE_PROMPT}</pre>
+              <div className="btn-row" style={{ marginTop: 'var(--s3)' }}>
+                <button type="button" className="btn" onClick={() => set('prompt', EXAMPLE_PROMPT)}>Use this example</button>
+                <button type="button" className="btn" onClick={copyExample}>Copy</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Drawer>
+  )
+}
+
+/* ── import ────────────────────────────────────────────── */
+function ImportEvals ({ onClose, onAdd, onReplace, currentCount }) {
+  const [stage, setStage] = useState('pick')
+  const [progress, setProgress] = useState(0)
+  const [mode, setMode] = useState('add')
+  const file = 'rcb_evals_sep.csv'
+
+  const run = () => {
+    setStage('reading')
+    let p = 0
+    const id = setInterval(() => {
+      p += 20
+      setProgress(p)
+      if (p >= 100) { clearInterval(id); setStage('done') }
+    }, 180)
+  }
+
+  const rows = useMemo(() => ([
+    { key: 'agent_states_call_reason', name: 'agent_states_call_reason', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Every call that is answered.', prompt: 'Pass if the agent says why it is calling within the first two turns.', criteria: ['Reason given in the first two turns'], status: 'draft' },
+    { key: 'no_cross_sell_other_program', name: 'no_cross_sell_other_program', severity: 'critical', baseline: 95, baselineOverride: false, applies: 'Calls where the lead asks about other programs.', prompt: 'Fail if the agent pitches a program other than the one in the lead record.', criteria: ['Only the recorded program is pitched'], status: 'draft' },
+    { key: 'spells_counsellor_name', name: 'spells_counsellor_name', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where a counsellor is named.', prompt: 'Pass if the counsellor name the agent says matches the lead record.', criteria: ['Counsellor name matches the record'], status: 'draft' },
+    { key: 'no_number_read_incorrectly', name: 'no_number_read_incorrectly', severity: 'moderate', baseline: 75, baselineOverride: false, applies: 'Calls where the agent reads a number aloud.', prompt: 'Fail if a phone number, date or time is read differently from the input variable.', criteria: ['Numbers match the input variables'], status: 'draft' }
+  ]), [])
+
+  return (
+    <Drawer
+      title="Import evals"
+      sub="One eval per row."
+      wide
+      onClose={onClose}
+      footer={
+        stage === 'done'
+          ? <>
+              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => { (mode === 'add' ? onAdd : onReplace)(rows); onClose() }}
+              >
+                {mode === 'add'
+                  ? `Add ${rows.length} evals`
+                  : `Replace ${currentCount} with ${rows.length}`}
+              </button>
+            </>
+          : <>
+              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={stage !== 'pick'} onClick={run}>Read file</button>
+            </>
+      }
+    >
+      <ContextHelper line="No CSV yet? Paste this file into Claude or ChatGPT. It asks a few questions and writes the CSV in the right format." />
+
+      {stage === 'pick' && (
+        <>
+          <div className="upload-zone">
+            <p>Drop a CSV here, or pick a file.</p>
+            <div style={{ marginTop: 'var(--s4)' }}>
+              <button type="button" className="btn" onClick={run}>Choose file</button>
+            </div>
+            <p style={{ marginTop: 'var(--s4)', fontSize: 12, color: 'var(--ink-3)' }}>{file}</p>
+          </div>
+          <div style={{ marginTop: 'var(--s5)' }}>
+            <div className="form-label">Columns</div>
+            <p className="mono cell-meta" style={{ lineHeight: 1.7 }}>
+              name, severity, scoring_type, trigger_condition, acceptance_criteria, good_examples, bad_examples, judge_prompt
+            </p>
+          </div>
+        </>
+      )}
+      {stage === 'reading' && (
+        <div>
+          <div className="cell-sub">Reading {file}</div>
+          <div className="progress"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+        </div>
+      )}
+      {stage === 'done' && (
+        <div>
+          <div className="cell-sub" style={{ marginBottom: 'var(--s4)' }}>{file} — {rows.length} rows, no errors</div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Eval</th><th>Severity</th></tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.key}>
+                    <td><span className="row-name mono">{r.name}</span></td>
+                    <td><Severity severity={r.severity} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: 'var(--s6)' }}>
+            <div className="form-label">What should happen to the current {currentCount} evals?</div>
+            <div className="choice-list">
+              <label className="choice">
+                <input type="radio" name="import-mode" value="add" checked={mode === 'add'} onChange={() => setMode('add')} />
+                <span>
+                  <span className="choice-title">Add to the set</span>
+                  <span className="choice-sub">The set becomes {currentCount + rows.length} evals.</span>
+                </span>
+              </label>
+              <label className="choice">
+                <input type="radio" name="import-mode" value="replace" checked={mode === 'replace'} onChange={() => setMode('replace')} />
+                <span>
+                  <span className="choice-title">Replace the set</span>
+                  <span className="choice-sub">The set becomes {rows.length} evals. The current {currentCount} are removed.</span>
+                </span>
+              </label>
+            </div>
+            {mode === 'replace' && (
+              <div style={{ marginTop: 'var(--s4)' }}>
+                <Notice>
+                  Replacing does not erase anything. Past runs keep the evals they ran with, so old results and
+                  evidence stay valid. The new set starts from the next publish.
+                </Notice>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Drawer>
+  )
+}
+
+/* ── publish ───────────────────────────────────────────── */
+function Publish ({ base, state, drafts, onClose, onPublish }) {
+  const [pv, setPv] = useState(state.promptVersion)
+  const next = `v${state.versions.length + 1}`
+  const wasOn = state.versions[0].promptVersion
+  const changed = pv !== wasOn
+  return (
+    <Drawer
+      title={`Publish ${next}`}
+      sub="Published sets cannot be edited later."
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => { onPublish(pv); onClose() }}>Publish {next}</button>
+        </>
+      }
+    >
+      <div className="form-stack">
+        <div className={changed ? 'notice notice-warn' : 'notice'}>
+          {changed
+            ? <>From tonight every eval runs against <span className="mono">{pv}</span>. Results already collected against <span className="mono">{wasOn}</span> stay as they are.</>
+            : <>From tonight every eval runs against <span className="mono">{pv}</span>.</>}
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pub-pv">Agent prompt version</label>
+          <select id="pub-pv" className="select" value={pv} onChange={e => setPv(e.target.value)} style={{ width: '100%' }}>
+            {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div className="def-list">
+          <div className="def-row"><div className="def-key">Evals in this set</div><div className="def-val"><span className="n-sm">{state.evals.length}</span></div></div>
+          <div className="def-row"><div className="def-key">New or changed</div><div className="def-val"><span className="n-sm">{drafts.length}</span></div></div>
+          <div className="def-row"><div className="def-key">First run</div><div className="def-val">Tonight, after midnight</div></div>
+        </div>
+        {drafts.length > 0 && (
+          <div>
+            <label className="form-label">Drafts</label>
+            <ul className="eval-mini">
+              {drafts.map(d => (
+                <li className="eval-mini-row" key={d.key}>
+                  <span className="eval-mini-name mono truncate">{d.name}</span>
+                  <Severity severity={d.severity} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Drawer>
+  )
+}
+
+/* ── tab ───────────────────────────────────────────────── */
+export default function EvalsTab () {
+  const { base, state } = useOutletContext()
+  const { agentId } = useParams()
+  const [sp, setSp] = useSearchParams()
+  const store = useStore()
+  const [drawer, setDrawer] = useState(null)
+
+  const viewing = sp.get('version')
+  const current = state.versions[0]
+  const readOnly = viewing && viewing !== state.currentVersionId
+  const shownVersion = readOnly ? state.versions.find(v => v.id === viewing) : current
+
+  const drafts = state.evals.filter(ev => ev.status === 'draft')
+  const evals = readOnly ? state.evals.slice(0, shownVersion ? shownVersion.evalCount : 0) : state.evals
+
+  const setVersion = id => {
+    if (id === state.currentVersionId) setSp({}, { replace: true })
+    else setSp({ version: id }, { replace: true })
+  }
+
+  return (
+    <>
+      <div className="banner">
+        <div className="banner-left">
+          <select
+            className="select"
+            aria-label="Version"
+            value={shownVersion ? shownVersion.id : state.currentVersionId}
+            onChange={e => setVersion(e.target.value)}
+          >
+            {state.versions.map(v => (
+              <option key={v.id} value={v.id}>
+                {v.label}{v.id === state.currentVersionId ? (state.published ? ' — published' : ' — last published') : ''}
+              </option>
+            ))}
+          </select>
+
+          {!readOnly && (
+            <span className={`pill ${state.published ? 'pill-live' : 'pill-draft'}`}>
+              {state.published ? 'Published' : 'Not published'}
+            </span>
+          )}
+
+          <span className="banner-meta">
+            {shownVersion.publishedOn} by {shownVersion.publishedBy}
+          </span>
+
+          {readOnly ? (
+            <>
+              <span className="banner-meta mono">{shownVersion.promptVersion}</span>
+              <span className="banner-readonly">Read only</span>
+            </>
+          ) : state.published ? (
+            <span className="banner-meta">Running on <span className="mono">{state.promptVersion}</span></span>
+          ) : (
+            <span className="field">
+              <label className="field-label" htmlFor="pv-select">Prompt version</label>
+              <select
+                id="pv-select"
+                className="select"
+                value={state.promptVersion}
+                onChange={e => store.setPromptVersion(agentId, e.target.value)}
+              >
+                {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </span>
+          )}
+        </div>
+
+        {!readOnly && (
+          <div className="btn-row">
+            {state.published ? (
+              <button type="button" className="btn" onClick={() => store.unpublish(agentId)}>Unpublish</button>
+            ) : (
+              <>
+                <button type="button" className="btn" onClick={() => setDrawer('import')}>Import evals</button>
+                <button type="button" className="btn" onClick={() => setDrawer('add')}>Add eval</button>
+                <button type="button" className="btn btn-primary" onClick={() => setDrawer('publish')}>
+                  Publish v{state.versions.length + 1}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!readOnly && (
+        <div style={{ paddingTop: 'var(--s4)' }}>
+          {state.published ? (
+            <Notice>Published sets cannot be changed. Unpublish to edit the evals or move to another prompt version.</Notice>
+          ) : (
+            <Notice warn>Nothing runs tonight. Publish to start this set.</Notice>
+          )}
+        </div>
+      )}
+
+      {drafts.length > 0 && !readOnly && !state.published && (
+        <div style={{ paddingTop: 'var(--s4)' }}>
+          <Notice warn>
+            {drafts.length === 1 ? '1 eval is a draft. It starts' : `${drafts.length} evals are drafts. They start`} running after you publish v{state.versions.length + 1}.
+          </Notice>
+        </div>
+      )}
+
+      <Section
+        title={readOnly ? `Evals in ${shownVersion.id}` : state.published ? `Evals in ${state.currentVersionId}` : 'Evals — draft'}
+        note={drafts.length && !readOnly
+          ? `${evals.length - drafts.length} live, ${drafts.length} draft`
+          : `${evals.length} total`}
+      >
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: '70%' }}>Eval</th>
+                <th style={{ width: '30%' }}>Severity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evals.map(ev => (
+                <tr key={ev.key}>
+                  <td>
+                    <span className="row-name mono">{ev.name}</span>
+                    {ev.status === 'draft' && <span className="tag tag-flag" style={{ marginLeft: 10 }}>Draft</span>}
+                  </td>
+                  <td><Severity severity={ev.severity} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {evals.length === 0 && <Empty title="No evals in this version." />}
+      </Section>
+
+      <Section title="Run rules">
+        <div className="def-list" style={{ maxWidth: 720 }}>
+          <div className="def-row">
+            <div className="def-key">Evals</div>
+            <div className="def-val">
+              <Toggle
+                on={state.evalsOn}
+                onChange={v => store.setEvalsOn(agentId, v)}
+                label={state.evalsOn ? 'On' : 'Off'}
+              />
+            </div>
+          </div>
+          <div className="def-row">
+            <div className="def-key">Minimum call length</div>
+            <div className="def-val">
+              <select
+                className="select"
+                aria-label="Minimum call length"
+                value={state.runRules.minDuration}
+                onChange={e => store.setRunRule(agentId, 'minDuration', Number(e.target.value))}
+              >
+                <option value={45}>Only calls over 45 seconds</option>
+                <option value={90}>Only calls over 90 seconds</option>
+                <option value={120}>Only calls over 2 minutes</option>
+                <option value={180}>Only calls over 3 minutes</option>
+              </select>
+            </div>
+          </div>
+          <div className="def-row">
+            <div className="def-key">Calls per night</div>
+            <div className="def-val">
+              <input
+                className="input"
+                type="number"
+                min="10"
+                step="10"
+                style={{ width: 110 }}
+                aria-label="Maximum calls evaluated per night"
+                value={state.runRules.maxPerNight}
+                onChange={e => store.setRunRule(agentId, 'maxPerNight', Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <div className="def-row">
+            <div className="def-key">Schedule</div>
+            <div className="def-val cell-sub">The job starts after midnight and stops at 7am. Calls it does not reach are picked up the next night.</div>
+          </div>
+        </div>
+      </Section>
+
+      {drawer === 'add' && <AddEval onClose={() => setDrawer(null)} onSave={d => store.addEval(agentId, d)} say={store.say} />}
+      {drawer === 'import' && (
+        <ImportEvals
+          onClose={() => setDrawer(null)}
+          currentCount={state.evals.length}
+          onAdd={rows => store.addBulk(agentId, rows)}
+          onReplace={rows => store.replaceEvals(agentId, rows)}
+        />
+      )}
+      {drawer === 'publish' && (
+        <Publish
+          base={base}
+          state={state}
+          drafts={drafts}
+          onClose={() => setDrawer(null)}
+          onPublish={pv => { store.publish(agentId, pv); setSp({}, { replace: true }) }}
+        />
+      )}
+    </>
+  )
+}
