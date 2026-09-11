@@ -2,6 +2,8 @@
 
 Clickable front-end prototype. Mock data only. No backend, no fetch, no storage.
 
+**Live:** https://pipinstallish.github.io/eval-system-prototype/
+
 ## Run
 
 ```
@@ -72,6 +74,14 @@ Bad calls fail more than one eval, so failures cluster the way they do in real r
 Pass and fail are shares of the calls where the eval applied. Unknown is a share of all
 evaluated calls. An eval is below baseline when its pass rate is under its baseline.
 Zero tolerance evals are counted, never shown as a rate.
+
+## Deploying
+
+Pushing to `main` builds and publishes to GitHub Pages. Pages serves from a subpath with no
+SPA rewrite, so the Vite `base` is `/eval-system-prototype/`, the router takes that as its
+basename, and the build copies `index.html` to `404.html` so a refresh on a deep link still
+loads the app. Deep links return a 404 status but render correctly; that is how the fallback
+works on Pages.
 
 ## Motion
 
