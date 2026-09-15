@@ -1,31 +1,26 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../state/store.jsx'
-import { callResults, fmtDur, fmtDate, isTest, FAIL } from '../data/universe.js'
-import { BATCHES } from '../data/catalogue.js'
-import { Drawer, Verdict } from './ui.jsx'
+import { AGENT, evalByKey, evidenceLines, outcomeLabel, fmtDur, fmtTime } from '../data/run.js'
+import { Drawer, Severity } from './ui.jsx'
 
-export default function CallDrawer ({ agent, call, ev, reason, onClose, closing }) {
+export default function CallDrawer ({ call, ev, failure, onClose, closing }) {
   const store = useStore()
   const [reasonText, setReasonText] = useState('')
   const [asking, setAsking] = useState(false)
-  const flagKey = `${call.id}|${ev.key}`
-  const flagged = store.flags[flagKey]
-  const test = isTest(call, store.testOverrides)
-  const batch = BATCHES.find(b => b.id === call.batchId)
-  const results = callResults(agent, call)
-  const others = results.filter(r => r.ev.key !== ev.key)
-  const otherFails = others.filter(r => r.verdict === FAIL)
+  const flagged = store.flags[`${call.id}|${ev.key}`]
+  const test = !!store.testOverrides[call.id]
+  const others = call.failures.filter(f => f.eval !== ev.key)
 
   return (
     <Drawer
-      title={call.leadName}
-      sub={`${fmtDate(call.date)}, ${fmtDur(call.durationSec)}`}
+      title={call.ref}
+      sub={`${fmtTime(call.time)}, ${fmtDur(call.durationSec)}`}
       closing={closing}
       onClose={onClose}
       footer={
         <>
-          <Link className="btn-quiet" to={`/agents/${agent.id}/calls/${encodeURIComponent(call.id)}?eval=${ev.key}`}>
+          <Link className="btn-quiet" to={`/agents/${AGENT.id}/calls/${encodeURIComponent(call.id)}?eval=${ev.key}`}>
             Open full call
           </Link>
           <button type="button" className="btn" onClick={() => store.markTest(call.id, !test)}>
@@ -36,40 +31,53 @@ export default function CallDrawer ({ agent, call, ev, reason, onClose, closing 
     >
       <div className="def-list">
         <div className="def-row">
-          <div className="def-key">Source</div>
-          <div className="def-val">{call.source === 'batch' ? (batch ? batch.name : call.batchId) : `Single — ${call.bda}`}</div>
+          <div className="def-key">Outcome</div>
+          <div className="def-val">{outcomeLabel(call.outcome)}</div>
         </div>
         <div className="def-row">
-          <div className="def-key">Program</div>
-          <div className="def-val">{call.program}</div>
+          <div className="def-key">Callback booked</div>
+          <div className="def-val">{call.booked ? 'Yes' : 'No'}</div>
         </div>
+        {call.rcbTime && (
+          <div className="def-row">
+            <div className="def-key">Slot written</div>
+            <div className="def-val mono">{call.rcbTime}</div>
+          </div>
+        )}
         <div className="def-row">
-          <div className="def-key">City</div>
-          <div className="def-val">{call.city}</div>
+          <div className="def-key">Interaction id</div>
+          <div className="def-val mono" style={{ fontSize: 12 }}>{call.id}</div>
         </div>
       </div>
 
       <div style={{ marginTop: 'var(--s6)' }}>
-        <div className="form-label">Why the judge failed it</div>
-        <p className="quote">{reason}</p>
+        <div className="form-label">What the judge found</div>
+        <div className="quote-list">
+          {evidenceLines(failure.instance).map((l, n) => (
+            <div className="quote-line" key={n}>
+              {l.label && <span className="quote-who">{l.label}</span>}
+              <span className="quote-text">{l.text}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ marginTop: 'var(--s6)' }}>
         <div className="form-label">
-          Other evals on this call{otherFails.length ? ` — ${otherFails.length} also failed` : ''}
+          {others.length ? `${others.length} other ${others.length === 1 ? 'eval' : 'evals'} failed on this call` : 'No other eval failed on this call'}
         </div>
-        <ul className="eval-mini">
-          {[...otherFails, ...others.filter(r => r.verdict !== FAIL)].slice(0, 12).map(r => (
-            <li className="eval-mini-row" key={r.ev.key}>
-              <span className="eval-mini-name mono truncate">{r.ev.name}</span>
-              <Verdict v={r.verdict} />
-            </li>
-          ))}
-        </ul>
-        {others.length > 12 && (
-          <p className="cell-meta" style={{ marginTop: 8 }}>
-            {others.length - 12} more on the full call.
-          </p>
+        {others.length > 0 && (
+          <ul className="eval-mini">
+            {others.map(f => {
+              const o = evalByKey(f.eval)
+              return (
+                <li className="eval-mini-row" key={f.eval}>
+                  <span className="eval-mini-name mono truncate">{o.name}</span>
+                  <Severity severity={o.severity} />
+                </li>
+              )
+            })}
+          </ul>
         )}
       </div>
 

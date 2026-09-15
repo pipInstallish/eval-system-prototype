@@ -1,30 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../state/store.jsx'
-import { AGENTS } from '../data/catalogue.js'
-import { agentHealth } from '../data/universe.js'
-import { int } from '../components/ui.jsx'
-
-const HEALTH = {
-  green: { color: 'var(--sev-moderate)', label: 'Fine' },
-  amber: { color: 'var(--sev-critical)', label: 'Watch' },
-  red: { color: 'var(--sev-zero)', label: 'Needs attention' },
-  off: { color: 'var(--hairline-strong)', label: '—' }
-}
-
-function Health ({ level }) {
-  const h = HEALTH[level]
-  return (
-    <span className="sev">
-      <span className="sev-dot" style={{ background: h.color }} />
-      <span className="sev-label">{h.label}</span>
-    </span>
-  )
-}
+import { AGENT, CALLS, RUN, aggregate, fmtDate, int } from '../data/run.js'
 
 export default function AgentsList () {
   const nav = useNavigate()
-  const { say, agentState, startTour } = useStore()
-  const rows = AGENTS.map(a => ({ a, health: agentHealth(a.id) }))
+  const { startTour, agent } = useStore()
+  const agg = aggregate(CALLS)
+  const open = () => nav(`/agents/${AGENT.id}/analytics`)
 
   return (
     <div className="page">
@@ -35,7 +17,6 @@ export default function AgentsList () {
         </div>
         <div className="btn-row">
           <button type="button" className="btn" onClick={startTour}>Guided tour</button>
-          <button type="button" className="btn" onClick={() => say('The agent builder opens here.')}>Add agent</button>
         </div>
       </div>
 
@@ -44,43 +25,47 @@ export default function AgentsList () {
           <thead>
             <tr>
               <th style={{ width: '34%' }}>Agent</th>
-              <th style={{ width: '11%' }}>Status</th>
-              <th className="r" style={{ width: '16%' }}>Calls, 7 days</th>
-              <th style={{ width: '13%' }}>Eval set</th>
+              <th style={{ width: '12%' }}>Status</th>
+              <th style={{ width: '14%' }}>Eval set</th>
+              <th className="r" style={{ width: '14%' }}>Calls with a failure</th>
               <th style={{ width: '26%' }}>Eval health</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ a, health }) => (
-              <tr
-                key={a.id}
-                className="row-link"
-                tabIndex={0}
-                onClick={() => nav(`/agents/${a.id}/analytics`)}
-                onKeyDown={ev => { if (ev.key === 'Enter') nav(`/agents/${a.id}/analytics`) }}
-              >
-                <td>
-                  <div className="row-name">{a.name}</div>
-                  <div className="cell-meta">{a.note}</div>
-                </td>
-                <td><span className="cell-sub">{a.status}</span></td>
-                <td className="r"><span className="n-md">{int(a.calls7d)}</span></td>
-                <td><span className="cell-sub">{agentState[a.id].published ? agentState[a.id].currentVersionId : 'Not published'}</span></td>
-                <td>
-                  <Health level={health.level} />
-                  {health.level === 'red' && (
-                    <div className="cell-meta">{health.zeroFired} zero tolerance {health.zeroFired === 1 ? 'failure' : 'failures'}{health.belowCount ? `, ${health.belowCount} below baseline` : ''}</div>
-                  )}
-                  {health.level === 'amber' && (
-                    <div className="cell-meta">{health.belowCount} below baseline</div>
-                  )}
-                  {health.level === 'off' && <div className="cell-meta">No published set</div>}
-                </td>
-              </tr>
-            ))}
+            <tr className="row-link" tabIndex={0} onClick={open} onKeyDown={e => { if (e.key === 'Enter') open() }}>
+              <td>
+                <div className="row-name">{AGENT.name}</div>
+                <div className="cell-meta">{AGENT.note}</div>
+              </td>
+              <td><span className="cell-sub">{AGENT.status}</span></td>
+              <td>
+                <span className="cell-sub">
+                  {agent.published ? agent.currentVersionId : 'Not published'}
+                </span>
+              </td>
+              <td className="r"><span className="n-md">{int(agg.callsWithFailure)}</span></td>
+              <td>
+                <span className="sev">
+                  <span
+                    className="sev-dot"
+                    style={{ background: agg.zeroFired ? 'var(--sev-zero)' : agg.failures ? 'var(--sev-critical)' : 'var(--sev-moderate)' }}
+                  />
+                  <span className="sev-label">
+                    {agg.zeroFired ? 'Needs attention' : agg.failures ? 'Watch' : 'Fine'}
+                  </span>
+                </span>
+                <div className="cell-meta">
+                  {agg.zeroFired} zero tolerance failures, {agg.slotCorrupted} bookings with a bad slot
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      <p className="notice" style={{ marginTop: 'var(--s6)' }}>
+        One run so far: {fmtDate(RUN.date)}, calls between {RUN.firstCall.slice(0, 5)} and {RUN.lastCall.slice(0, 5)}.
+      </p>
     </div>
   )
 }

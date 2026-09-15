@@ -6,8 +6,6 @@ import AgentDetail from './screens/AgentDetail.jsx'
 import ConfigurationTab from './screens/ConfigurationTab.jsx'
 import EvalsTab from './screens/EvalsTab.jsx'
 import AnalyticsTab from './screens/AnalyticsTab.jsx'
-import BatchList from './screens/BatchList.jsx'
-import BatchView from './screens/BatchView.jsx'
 import Evidence from './screens/Evidence.jsx'
 import CallDetail from './screens/CallDetail.jsx'
 
@@ -67,8 +65,6 @@ export default function App () {
             <Route path="evals" element={<EvalsTab />} />
             <Route path="analytics" element={<AnalyticsTab />} />
           </Route>
-          <Route path="/agents/:agentId/analytics/batches" element={<BatchList />} />
-          <Route path="/agents/:agentId/analytics/batch/:batchId" element={<BatchView />} />
           <Route path="/agents/:agentId/evals/:evalKey/evidence" element={<Evidence />} />
           <Route path="/agents/:agentId/evals/:evalKey/failures" element={<FailuresRedirect />} />
           <Route path="/agents/:agentId/calls/:callId" element={<CallDetail />} />

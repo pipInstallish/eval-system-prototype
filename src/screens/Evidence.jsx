@@ -1,68 +1,54 @@
 import { useMemo, useState } from 'react'
-import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { useAgent, useStore } from '../state/store.jsx'
-import { BATCHES } from '../data/catalogue.js'
-import { getUniverse, aggregate, filterCalls, failuresFor, criteriaFor, evidenceFor, isTest, fmtDur, fmtDate, DATE_RANGES } from '../data/universe.js'
+import { useParams, Link } from 'react-router-dom'
+import { useStore } from '../state/store.jsx'
+import {
+  AGENT, CALLS, evalByKey, aggregate, filterCalls, failuresFor,
+  evidenceLines, outcomeLabel, fmtDur, fmtTime, int
+} from '../data/run.js'
+import { Severity, Empty, Notice } from '../components/ui.jsx'
 import { failureRows, downloadCsv } from '../data/export.js'
-import { Severity, StatusNumber, ZeroCount, Empty, Notice, int } from '../components/ui.jsx'
 import CallDrawer from '../components/CallDrawer.jsx'
 
 export default function Evidence () {
-  const { agentId, evalKey } = useParams()
-  const [sp] = useSearchParams()
-  const { base } = useAgent(agentId)
-  const { testOverrides, filters, say } = useStore()
+  const { evalKey } = useParams()
+  const { filters, testOverrides, say } = useStore()
   const [openCall, setOpenCall] = useState(null)
   const [closing, setClosing] = useState(false)
+
+  const scoped = useMemo(() => filterCalls(CALLS, filters, testOverrides), [filters, testOverrides])
+  const agg = useMemo(() => aggregate(scoped), [scoped])
+  const rows = useMemo(() => failuresFor(scoped, evalKey), [scoped, evalKey])
+
+  const ev = evalByKey(evalKey)
+  const row = agg.rows.find(r => r.key === evalKey)
+  if (!ev || !row) return null
+
   const closeCall = () => {
     setClosing(true)
     setTimeout(() => { setOpenCall(null); setClosing(false) }, 170)
   }
-
-  const batchParam = sp.get('batch')
-  const rangeParam = sp.get('range')
-  const { calls } = getUniverse(agentId)
-
-  const localFilters = useMemo(() => ({
-    range: rangeParam && DATE_RANGES.some(r => r.id === rangeParam) ? rangeParam : filters.range,
-    batch: batchParam || 'all',
-    source: 'all',
-    excludeTest: filters.excludeTest
-  }), [rangeParam, batchParam, filters.range, filters.excludeTest])
-
-  const scoped = useMemo(() => filterCalls(calls, localFilters, testOverrides), [calls, localFilters, testOverrides])
-  const agg = useMemo(() => aggregate(base, scoped), [base, scoped])
-
-  const ev = base && base.evals.find(e => e.key === evalKey)
-  const row = agg.rows.find(r => r.key === evalKey)
-  const rows = useMemo(() => failuresFor(base, scoped, evalKey), [base, scoped, evalKey])
-  const batch = batchParam ? BATCHES.find(b => b.id === batchParam) : null
-
-  if (!base || !ev || !row) return null
-
-  const backTo = batch
-    ? `/agents/${agentId}/analytics/batch/${batch.id}`
-    : `/agents/${agentId}/analytics`
 
   return (
     <div className="page page-wide">
       <div className="crumb">
         <Link to="/agents">Managed Agents</Link>
         <span className="crumb-sep">/</span>
-        <Link to={`/agents/${agentId}/analytics`}>{base.name}</Link>
+        <Link to={`/agents/${AGENT.id}/analytics`}>{AGENT.name}</Link>
         <span className="crumb-sep">/</span>
-        {batch && <><Link to={backTo}>{batch.id}</Link><span className="crumb-sep">/</span></>}
         Evidence
       </div>
 
       <div className="head-row">
-        <h1 className="page-title mono" style={{ fontSize: 'var(--t-20)' }}>{ev.name}</h1>
+        <div>
+          <h1 className="page-title mono" style={{ fontSize: 'var(--t-20)' }}>{ev.name}</h1>
+          <div className="meta-row"><span>{ev.label}</span></div>
+        </div>
         <button
           type="button"
           className="btn"
           disabled={rows.length === 0}
           onClick={() => {
-            downloadCsv(`${ev.key}-evidence.csv`, failureRows(base, scoped, [ev.key], testOverrides))
+            downloadCsv(`${ev.key}-evidence.csv`, failureRows(scoped, [ev.key]))
             say(`${rows.length} rows exported.`)
           }}
         >
@@ -75,32 +61,17 @@ export default function Evidence () {
           <div className="strip-label">Severity</div>
           <div style={{ marginTop: 5 }}><Severity severity={ev.severity} /></div>
         </div>
-        {row.isZero ? (
-          <div className="strip-item">
-            <div className="strip-label">Failed</div>
-            <div style={{ marginTop: 4 }}><ZeroCount n={row.fail} /></div>
-          </div>
-        ) : (
-          <>
-            <div className="strip-item">
-              <div className="strip-label">Pass</div>
-              <div className="strip-value">
-                <StatusNumber value={row.passPct} below={row.below} severity={ev.severity} />
-              </div>
-            </div>
-            <div className="strip-item">
-              <div className="strip-label">Baseline</div>
-              <div className="strip-value">{ev.baseline}%</div>
-            </div>
-            <div className="strip-item">
-              <div className="strip-label">Failed</div>
-              <div className="strip-value">{int(row.fail)}<span className="unit">of {int(row.applied)}</span></div>
-            </div>
-          </>
-        )}
         <div className="strip-item">
-          <div className="strip-label">How often it applied</div>
-          <div className="strip-value">{row.appliedPct.toFixed(0)}%</div>
+          <div className="strip-label">Failures</div>
+          <div className="strip-value">{int(row.failures)}</div>
+        </div>
+        <div className="strip-item">
+          <div className="strip-label">Calls</div>
+          <div className="strip-value">{int(row.callsFailed)}</div>
+        </div>
+        <div className="strip-item">
+          <div className="strip-label">Bookings hit</div>
+          <div className={`strip-value${row.bookedAmong ? ' is-flag' : ''}`}>{int(row.bookedAmong)}</div>
         </div>
       </div>
 
@@ -117,84 +88,68 @@ export default function Evidence () {
             </div>
           </div>
         </div>
-        <div className="def-row">
-          <div className="def-key">Judge prompt</div>
-          <div className="def-val">{ev.prompt}</div>
-        </div>
       </div>
-
-      {batch && (
-        <div style={{ marginTop: 'var(--s5)' }}>
-          <Notice>Showing only calls from {batch.name}.</Notice>
-        </div>
-      )}
 
       {rows.length === 0 ? (
         <div style={{ marginTop: 'var(--s6)' }}>
-          <Empty title="No evidence here." body="This eval did not fail any call in the current date range." />
+          <Empty title="No evidence here." body="No call in this view broke this eval." />
         </div>
       ) : (
         <div className="table-wrap">
           <table className="table table-fixed" data-tour="evidence" style={{ marginTop: 'var(--s6)' }}>
             <thead>
               <tr>
-                <th style={{ width: '10%' }}>Call id</th>
-                <th style={{ width: '17%' }}>Lead</th>
-                <th style={{ width: '8%' }}>Date</th>
-                <th style={{ width: '23%' }}>Acceptance criteria failing</th>
-                <th style={{ width: '42%' }}>What the agent said</th>
+                <th style={{ width: '10%' }}>Call</th>
+                <th style={{ width: '8%' }}>Time</th>
+                <th className="r" style={{ width: '8%' }}>Length</th>
+                <th style={{ width: '17%' }}>Outcome</th>
+                <th style={{ width: '57%' }}>What happened</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ call, reason }) => {
-              const test = isTest(call, testOverrides)
-              const evidence = evidenceFor(call, ev)
-              return (
-                <tr
-                  key={call.id}
-                  className="row-link"
-                  tabIndex={0}
-                  onClick={() => setOpenCall({ call, reason })}
-                  onKeyDown={e => { if (e.key === 'Enter') setOpenCall({ call, reason }) }}
-                >
-                  <td><span className="cell-sub mono">{call.interactionId}</span></td>
-                  <td>
-                    <div className="row-name">{call.leadName}</div>
-                    <div className="cell-meta">{call.batchId || `Single — ${call.bda}`}</div>
-                  </td>
-                  <td>
-                    <span className="cell-sub">{fmtDate(call.date)}</span>
-                    {test && <div className="cell-meta">Test call</div>}
-                  </td>
-                  <td>
-                    <div className="chip-stack">
-                      {criteriaFor(call, ev).map(c => <span className="var-chip" key={c}>{c}</span>)}
-                    </div>
-                  </td>
-                  <td>
-                    {evidence.quote ? (
-                      <>
-                        <div className="cell-sub truncate">{`“${evidence.quote}”`}</div>
-                        <div className="cell-meta truncate">At {evidence.at}, {reason}</div>
-                      </>
-                    ) : (
-                      <div className="cell-sub truncate">{reason}</div>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
+              {rows.map(({ call, failure }) => {
+                const lines = evidenceLines(failure.instance)
+                const first = lines[0]
+                return (
+                  <tr
+                    key={call.id}
+                    className="row-link"
+                    tabIndex={0}
+                    onClick={() => setOpenCall({ call, failure })}
+                    onKeyDown={e => { if (e.key === 'Enter') setOpenCall({ call, failure }) }}
+                  >
+                    <td><span className="cell-sub mono">{call.ref}</span></td>
+                    <td><span className="cell-sub">{fmtTime(call.time)}</span></td>
+                    <td className="r"><span className="n-sm">{fmtDur(call.durationSec)}</span></td>
+                    <td>
+                      <div className="cell-sub truncate">{outcomeLabel(call.outcome)}</div>
+                      {call.booked && <span className="tag tag-flag">Booked</span>}
+                    </td>
+                    <td>
+                      <div className="cell-sub truncate">
+                        {first ? `${first.label ? first.label + ': ' : ''}“${first.text}”` : failure.instance}
+                      </div>
+                      {lines.length > 1 && (
+                        <div className="cell-meta">{lines.length - 1} more {lines.length === 2 ? 'line' : 'lines'} on the call</div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
           </table>
         </div>
       )}
 
+      <div style={{ marginTop: 'var(--s6)' }}>
+        <Notice>Quotes are the passages the judge returned. Open a call to see all of them.</Notice>
+      </div>
+
       {openCall && (
         <CallDrawer
-          agent={base}
           call={openCall.call}
           ev={ev}
-          reason={openCall.reason}
+          failure={openCall.failure}
           closing={closing}
           onClose={closeCall}
         />

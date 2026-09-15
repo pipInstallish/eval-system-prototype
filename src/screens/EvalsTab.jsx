@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useOutletContext, useParams, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../state/store.jsx'
-import { DEFAULT_BASELINE } from '../data/catalogue.js'
+import { AGENT, DEFAULT_BASELINE, PROMPT_VERSIONS } from '../data/run.js'
 import { Severity, Drawer, Section, Notice, Empty } from '../components/ui.jsx'
 import { SAMPLE_JSON, evalsFromJson } from '../data/evalJson.js'
 
@@ -491,7 +491,7 @@ function NewSet ({ closing, state, onClose, onCreate }) {
 }
 
 /* ── publish ───────────────────────────────────────────── */
-function Publish ({ closing, base, state, onClose, onPublish, onPromptVersion }) {
+function Publish ({ closing, state, onClose, onPublish, onPromptVersion }) {
   const draft = state.draft
   const pv = draft.promptVersion
   const setPv = onPromptVersion
@@ -527,7 +527,7 @@ function Publish ({ closing, base, state, onClose, onPublish, onPromptVersion })
         <div>
           <label className="form-label" htmlFor="pub-pv">Agent prompt version</label>
           <select id="pub-pv" className="select" value={pv} onChange={e => setPv(e.target.value)} style={{ width: '100%' }}>
-            {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
+            {PROMPT_VERSIONS.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </div>
         <div className="def-list">
@@ -546,10 +546,10 @@ function Publish ({ closing, base, state, onClose, onPublish, onPromptVersion })
 
 /* ── tab ───────────────────────────────────────────────── */
 export default function EvalsTab () {
-  const { base, state } = useOutletContext()
-  const { agentId } = useParams()
+  const store0 = useStore()
+  const state = store0.agent
   const [sp, setSp] = useSearchParams()
-  const store = useStore()
+  const store = store0
   const [drawer, setDrawer] = useState(null)
   const [closing, setClosing] = useState(false)
   const closeDrawer = () => {
@@ -604,9 +604,9 @@ export default function EvalsTab () {
                   id="pv-select"
                   className="select"
                   value={draft.promptVersion}
-                  onChange={e => store.setDraftPromptVersion(agentId, e.target.value)}
+                  onChange={e => store.setDraftPromptVersion(e.target.value)}
                 >
-                  {base.promptVersions.map(v => <option key={v} value={v}>{v}</option>)}
+                  {PROMPT_VERSIONS.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </span>
             </>
@@ -615,13 +615,16 @@ export default function EvalsTab () {
               <span className={`pill ${state.published ? 'pill-live' : 'pill-draft'}`}>
                 {state.published ? 'Live' : 'Not published'}
               </span>
-              <span className="banner-meta">{state.versions[0].publishedOn} by {state.versions[0].publishedBy}</span>
-              <span className="banner-meta">Running on <span className="mono">{state.promptVersion}</span></span>
+              <span className="banner-meta">Ran {state.versions[0].ranOn}</span>
+              <span className="banner-meta">
+                {state.promptVersion
+                  ? <>Running on <span className="mono">{state.promptVersion}</span></>
+                  : 'Prompt version not in this export'}
+              </span>
             </>
           ) : (
             <>
-              <span className="banner-meta">{history ? `${history.publishedOn} by ${history.publishedBy}` : ''}</span>
-              <span className="banner-meta mono">{history ? history.promptVersion : ''}</span>
+              <span className="banner-meta">{history ? `Ran ${history.ranOn}` : ''}</span>
               <span className="banner-readonly">Read only</span>
             </>
           )}
@@ -633,14 +636,14 @@ export default function EvalsTab () {
               <button type="button" className="btn" onClick={() => setDrawer('csv')}>Import CSV</button>
               <button type="button" className="btn" onClick={() => setDrawer('json')}>Import JSON</button>
               <button type="button" className="btn" onClick={() => setDrawer('add')}>Add eval</button>
-              <button type="button" className="btn" onClick={() => { store.discardDraft(agentId); setSp({}, { replace: true }) }}>Discard</button>
+              <button type="button" className="btn" onClick={() => { store.discardDraft(); setSp({}, { replace: true }) }}>Discard</button>
               <button type="button" className="btn btn-primary" onClick={() => setDrawer('publish')}>Publish {nextId}</button>
             </>
           )}
           {onLive && (
             state.published
-              ? <button type="button" className="btn" onClick={() => store.unpublish(agentId)}>Unpublish {liveId}</button>
-              : <button type="button" className="btn btn-primary" onClick={() => store.republish(agentId)}>Publish {liveId}</button>
+              ? <button type="button" className="btn" onClick={() => store.unpublish()}>Unpublish {liveId}</button>
+              : <button type="button" className="btn btn-primary" onClick={() => store.republish()}>Publish {liveId}</button>
           )}
         </div>
       </div>
@@ -699,39 +702,16 @@ export default function EvalsTab () {
       <Section tourId="run-rules" title="Run rules">
         <div className="def-list" style={{ maxWidth: 720 }}>
           <div className="def-row">
-            <div className="def-key">Minimum call length</div>
-            <div className="def-val">
-              <select
-                className="select"
-                aria-label="Minimum call length"
-                value={state.runRules.minDuration}
-                onChange={e => store.setRunRule(agentId, 'minDuration', Number(e.target.value))}
-              >
-                <option value={45}>Only calls over 45 seconds</option>
-                <option value={90}>Only calls over 90 seconds</option>
-                <option value={120}>Only calls over 2 minutes</option>
-                <option value={180}>Only calls over 3 minutes</option>
-              </select>
-            </div>
-          </div>
-          <div className="def-row">
-            <div className="def-key">Calls per night</div>
-            <div className="def-val">
-              <input
-                className="input"
-                type="number"
-                min="10"
-                step="10"
-                style={{ width: 110 }}
-                aria-label="Maximum calls evaluated per night"
-                value={state.runRules.maxPerNight}
-                onChange={e => store.setRunRule(agentId, 'maxPerNight', Number(e.target.value))}
-              />
-            </div>
+            <div className="def-key">Counsellor window</div>
+            <div className="def-val">{AGENT.runRules.window}</div>
           </div>
           <div className="def-row">
             <div className="def-key">Schedule</div>
-            <div className="def-val cell-sub">The job starts after midnight and stops at 7am. Calls it does not reach are picked up the next night.</div>
+            <div className="def-val cell-sub">The job runs at night. Calls it does not reach are picked up the next night.</div>
+          </div>
+          <div className="def-row">
+            <div className="def-key">Everything else</div>
+            <div className="def-val cell-sub">Not in this export. Set in the agent builder.</div>
           </div>
         </div>
       </Section>
@@ -741,11 +721,11 @@ export default function EvalsTab () {
           closing={closing}
           state={state}
           onClose={closeDrawer}
-          onCreate={from => { store.newDraft(agentId, from); setSp({}, { replace: true }) }}
+          onCreate={from => { store.newDraft(from); setSp({}, { replace: true }) }}
         />
       )}
       {drawer === 'add' && (
-        <AddEval closing={closing} onClose={closeDrawer} onSave={d => store.addEval(agentId, d)} say={store.say} />
+        <AddEval closing={closing} onClose={closeDrawer} onSave={d => store.addEval(d)} say={store.say} />
       )}
       {(drawer === 'csv' || drawer === 'json') && (
         <ImportEvals
@@ -754,18 +734,17 @@ export default function EvalsTab () {
           onClose={closeDrawer}
           currentCount={draft ? draft.evals.length : 0}
           say={store.say}
-          onAdd={rows => store.addBulk(agentId, rows)}
-          onReplace={rows => store.replaceEvals(agentId, rows)}
+          onAdd={rows => store.addBulk(rows)}
+          onReplace={rows => store.replaceEvals(rows)}
         />
       )}
       {drawer === 'publish' && draft && (
         <Publish
           closing={closing}
-          base={base}
           state={state}
           onClose={closeDrawer}
-          onPromptVersion={pv => store.setDraftPromptVersion(agentId, pv)}
-          onPublish={() => { store.publish(agentId); setSp({}, { replace: true }) }}
+          onPromptVersion={pv => store.setDraftPromptVersion(pv)}
+          onPublish={() => { store.publish(); setSp({}, { replace: true }) }}
         />
       )}
     </>

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { SEVERITY_LABEL } from '../data/catalogue.js'
+import { SEVERITY_LABEL } from '../data/run.js'
 
 /* ── numbers ───────────────────────────────────────────── */
 export const pct = (v, d = 1) => (v == null ? '—' : `${v.toFixed(d)}%`)
@@ -23,30 +23,6 @@ export function StatusNumber ({ value, below, severity, digits = 1, size = 'n-md
 export function ZeroCount ({ n }) {
   if (n === 0) return <span className="n-md n-dim">0 calls</span>
   return <span className="count-pill">{n} {n === 1 ? 'call' : 'calls'}</span>
-}
-
-/* ── sparkline: shape only ─────────────────────────────── */
-export function Sparkline ({ values, w = 60, h = 16 }) {
-  if (values.filter(v => v != null).length < 2) {
-    return <span className="n-dim" style={{ fontSize: 12 }}>—</span>
-  }
-  const pts = []
-  let last = null
-  values.forEach(v => { if (v != null) last = v; pts.push(last) })
-  const clean = pts.map(v => (v == null ? null : v))
-  const real = clean.filter(v => v != null)
-  const min = Math.min(...real), max = Math.max(...real)
-  const span = max - min || 1
-  const step = (w - 2) / (clean.length - 1)
-  const d = clean.map((v, i) => {
-    const y = v == null ? h / 2 : h - 2 - ((v - min) / span) * (h - 4)
-    return `${i === 0 ? 'M' : 'L'}${(1 + i * step).toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
-  return (
-    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path d={d} fill="none" stroke="var(--ink-3)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
 }
 
 /* ── controls ──────────────────────────────────────────── */

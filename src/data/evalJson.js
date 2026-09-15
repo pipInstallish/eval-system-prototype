@@ -1,4 +1,4 @@
-import { DEFAULT_BASELINE } from './catalogue.js'
+import { DEFAULT_BASELINE } from './run.js'
 
 export const SAMPLE_JSON = `[
   {

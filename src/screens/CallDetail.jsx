@@ -1,80 +1,67 @@
-import { useMemo, useState } from 'react'
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { useAgent, useStore } from '../state/store.jsx'
-import { BATCHES } from '../data/catalogue.js'
+import { useState } from 'react'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
+import { useStore } from '../state/store.jsx'
 import {
-  getUniverse, callResults, transcriptFor, highlightTurns,
-  reasonFor, fmtDur, fmtDate, isTest, renderText, FAIL
-} from '../data/universe.js'
-import { Verdict, Notice, Empty } from '../components/ui.jsx'
+  AGENT, callById, evalByKey, evidenceLines,
+  outcomeLabel, fmtDur, fmtTime, fmtDate
+} from '../data/run.js'
+import { Severity, Notice, Empty } from '../components/ui.jsx'
 
-function TurnText ({ turn, hit, call }) {
-  const text = renderText(turn.text, call)
-  const mark = renderText(turn.mark, call)
-  if (!hit || !mark || !text.includes(mark)) return <>{text}</>
-  const i = text.indexOf(mark)
+function Evidence ({ failure }) {
   return (
-    <>
-      {text.slice(0, i)}
-      <mark>{mark}</mark>
-      {text.slice(i + mark.length)}
-    </>
+    <div className="quote-list">
+      {evidenceLines(failure.instance).map((l, n) => (
+        <div className="quote-line" key={n}>
+          {l.label && <span className="quote-who">{l.label}</span>}
+          <span className="quote-text">{l.text}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
 export default function CallDetail () {
-  const { agentId, callId } = useParams()
+  const { callId } = useParams()
   const [sp] = useSearchParams()
-  const nav = useNavigate()
-  const { base } = useAgent(agentId)
   const store = useStore()
   const [flagText, setFlagText] = useState('')
-  const [asking, setAsking] = useState(false)
+  const [asking, setAsking] = useState(null)
 
-  const { byId } = getUniverse(agentId)
-  const call = byId.get(decodeURIComponent(callId))
-
-  const results = useMemo(() => (call ? callResults(base, call) : []), [base, call])
-  const failing = results.filter(r => r.verdict === FAIL)
-  const wanted = sp.get('eval')
-  const focus = failing.find(r => r.ev.key === wanted) || failing[0] || results[0]
-
-  if (!base || !call) {
+  const call = callById(decodeURIComponent(callId))
+  if (!call) {
     return (
       <div className="page">
-        <Empty title="Call not found." body={<Link to={`/agents/${agentId}/analytics`}>Back to analytics</Link>} />
+        <Empty title="Call not found." body={<Link to={`/agents/${AGENT.id}/analytics`}>Back to analytics</Link>} />
       </div>
     )
   }
 
-  const ev = focus.ev
-  const tr = transcriptFor(call)
-  const hits = highlightTurns(call, ev)
-  const batch = BATCHES.find(b => b.id === call.batchId)
-  const test = isTest(call, store.testOverrides)
-  const flagged = store.flags[`${call.id}|${ev.key}`]
+  const wanted = sp.get('eval')
+  const ordered = [...call.failures].sort((a, b) => (a.eval === wanted ? -1 : b.eval === wanted ? 1 : 0))
+  const test = !!store.testOverrides[call.id]
+  const first = evalByKey(ordered[0].eval)
 
   return (
     <div className="page page-wide">
       <div className="crumb">
         <Link to="/agents">Managed Agents</Link>
         <span className="crumb-sep">/</span>
-        <Link to={`/agents/${agentId}/analytics`}>{base.name}</Link>
+        <Link to={`/agents/${AGENT.id}/analytics`}>{AGENT.name}</Link>
         <span className="crumb-sep">/</span>
-        <Link to={`/agents/${agentId}/evals/${ev.key}/evidence`}>{ev.name}</Link>
+        <Link to={`/agents/${AGENT.id}/evals/${first.key}/evidence`}>{first.name}</Link>
         <span className="crumb-sep">/</span>
-        {call.leadName}
+        {call.ref}
       </div>
 
       <div className="head-row">
         <div>
-          <h1 className="page-title">{call.leadName}</h1>
+          <h1 className="page-title mono">{call.ref}</h1>
           <div className="meta-row">
             <span>{fmtDate(call.date)}</span>
+            <span>{fmtTime(call.time)}</span>
             <span>{fmtDur(call.durationSec)}</span>
-            <span>{call.source === 'batch' ? (batch ? batch.name : call.batchId) : `Single — ${call.bda}`}</span>
-            <span>{call.program}</span>
-            <span>{call.city}</span>
+            <span>{outcomeLabel(call.outcome)}</span>
+            {call.booked && <span className="tag tag-flag">Callback booked</span>}
             {test && <span className="tag tag-test">Test call</span>}
           </div>
         </div>
@@ -86,73 +73,69 @@ export default function CallDetail () {
       </div>
 
       <div className="layout-2col" style={{ marginTop: 'var(--s6)' }}>
-        <div className="col-main">
-          <div className="transcript" data-tour="transcript">
-            {tr.turns.map((t, i) => {
-              const hit = hits.includes(i)
-              return (
-                <div className={`turn${hit ? ' is-hit' : ''}`} key={i}>
-                  <span className="turn-time">{t.t}</span>
-                  <span className="turn-who">{t.who}</span>
-                  <span className="turn-text"><TurnText turn={t} hit={hit} call={call} /></span>
+        <div className="col-main" data-tour="transcript">
+          {ordered.map(f => {
+            const ev = evalByKey(f.eval)
+            const flagged = store.flags[`${call.id}|${ev.key}`]
+            return (
+              <section className="call-fail" key={f.eval}>
+                <div className="call-fail-head">
+                  <div>
+                    <div className="row-name mono">{ev.name}</div>
+                    <div className="cell-meta">{ev.label}</div>
+                  </div>
+                  <Severity severity={ev.severity} />
                 </div>
-              )
-            })}
-          </div>
+
+                <Evidence failure={f} />
+
+                {f.note && <p className="cell-meta mono" style={{ marginTop: 10 }}>{f.note}</p>}
+
+                <div style={{ marginTop: 'var(--s4)' }}>
+                  {flagged ? (
+                    <p className="cell-sub"><span className="tag tag-flag">Flagged</span> {flagged}</p>
+                  ) : asking === ev.key ? (
+                    <div>
+                      <label className="form-label" htmlFor={`flag-${ev.key}`}>Why was the judge wrong? Optional.</label>
+                      <input id={`flag-${ev.key}`} className="input" value={flagText} onChange={e => setFlagText(e.target.value)} />
+                      <div className="btn-row" style={{ marginTop: 'var(--s3)' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => { store.flagJudge(call.id, ev.key, flagText); setAsking(null); setFlagText('') }}
+                        >
+                          Send flag
+                        </button>
+                        <button type="button" className="btn" onClick={() => setAsking(null)}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn" onClick={() => setAsking(ev.key)}>Judge got this wrong</button>
+                  )}
+                </div>
+              </section>
+            )
+          })}
         </div>
 
-        <aside className="col-side">
+        <aside className="col-side" data-tour="call-evals">
           <div className="side-block">
-            <div className="form-label">Failed eval</div>
-            <div className="row-name mono">{ev.name}</div>
-            <p className="quote" style={{ marginTop: 'var(--s3)' }}>{reasonFor(call, ev)}</p>
-
-            <div style={{ marginTop: 'var(--s4)' }}>
-              {flagged ? (
-                <p className="cell-sub"><span className="tag tag-flag">Flagged</span> {flagged}</p>
-              ) : asking ? (
-                <div>
-                  <label className="form-label" htmlFor="cd-flag">Why was the judge wrong? Optional.</label>
-                  <input id="cd-flag" className="input" value={flagText} onChange={e => setFlagText(e.target.value)} />
-                  <div className="btn-row" style={{ marginTop: 'var(--s3)' }}>
-                    <button type="button" className="btn btn-primary" onClick={() => { store.flagJudge(call.id, ev.key, flagText); setAsking(false) }}>
-                      Send flag
-                    </button>
-                    <button type="button" className="btn" onClick={() => setAsking(false)}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <button type="button" className="btn" onClick={() => setAsking(true)}>Judge got this wrong</button>
-              )}
+            <div className="form-label">This call</div>
+            <div className="def-list">
+              <div className="def-row"><div className="def-key">Evals failed</div><div className="def-val"><span className="n-sm">{call.failures.length}</span></div></div>
+              <div className="def-row"><div className="def-key">Callback booked</div><div className="def-val">{call.booked ? 'Yes' : 'No'}</div></div>
+              {call.rcbTime && <div className="def-row"><div className="def-key">Slot written</div><div className="def-val mono">{call.rcbTime}</div></div>}
+              {call.salaryNow && <div className="def-row"><div className="def-key">Salary on record</div><div className="def-val mono">{call.salaryNow}</div></div>}
+              {call.endReason && <div className="def-row"><div className="def-key">Call ended by</div><div className="def-val mono">{call.endReason}</div></div>}
+              <div className="def-row"><div className="def-key">Interaction id</div><div className="def-val mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>{call.id}</div></div>
             </div>
           </div>
 
-          <div className="side-block" data-tour="call-evals">
-            <div className="form-label">
-              All evals on this call{failing.length > 1 ? ` — ${failing.length} failed` : ''}
-            </div>
-            <ul className="eval-mini">
-              {[...failing, ...results.filter(r => r.verdict !== FAIL)].map(r => (
-                <li className="eval-mini-row" key={r.ev.key}>
-                  <button
-                    type="button"
-                    className="eval-mini-name mono truncate btn-quiet"
-                    style={{ textAlign: 'left' }}
-                    onClick={() => nav(`/agents/${agentId}/calls/${encodeURIComponent(call.id)}?eval=${r.ev.key}`)}
-                  >
-                    {r.ev.name}
-                  </button>
-                  <Verdict v={r.verdict} />
-                </li>
-              ))}
-            </ul>
+          <div className="side-block">
+            <Notice>
+              The export carries the passages the judge quoted, not the full transcript.
+            </Notice>
           </div>
-
-          {hits.length === 0 && (
-            <div className="side-block">
-              <Notice>The judge did not return a passage for this call. Its reason is above.</Notice>
-            </div>
-          )}
         </aside>
       </div>
     </div>

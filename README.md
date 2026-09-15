@@ -1,6 +1,6 @@
 # Call eval system — v0 prototype
 
-Clickable front-end prototype. Mock data only. No backend, no fetch, no storage.
+Clickable front-end prototype over a real eval run. No backend, no fetch, no storage.
 
 **Live:** https://pipinstallish.github.io/eval-system-prototype/
 
@@ -20,17 +20,16 @@ Opens on http://localhost:5181
 | `/agents` | Managed Agents list |
 | `/agents/:id/configuration` | Configuration (read-only stub) |
 | `/agents/:id/evals` | Eval set, version banner, run rules |
-| `/agents/:id/evals?version=v2` | Older published set, read only |
-| `/agents/:id/analytics` | Agent overview — health strip, needs attention, all evals |
-| `/agents/:id/analytics/batches` | Batch list |
-| `/agents/:id/analytics/batch/:batchId` | Batch view |
-| `/agents/:id/evals/:evalKey/evidence` | Every call where one eval broke, with the criterion and the quote |
-| `/agents/:id/calls/:callId` | Full call — transcript and all eval results |
+| `/agents/:id/evals?set=v1` | An older set, read only |
+| `/agents/:id/analytics` | Agent overview — run summary and the evals that failed |
+| `/agents/:id/evals/:evalKey/evidence` | Every call where one eval broke, with the quoted lines |
+| `/agents/:id/calls/:callId` | One call — every eval it broke, with the quoted turns |
 
-The evidence table opens a drawer for a quick scan (judge reason, other evals on the
-call, flag, mark as test). The drawer links to the full call page for the transcript.
+The evidence table opens a drawer for a quick scan: the quoted lines, what the call wrote,
+the other evals it broke, flag, mark as test. The drawer links to the full call page.
 
-Analytics shows one table of evals that failed, sorted by most failed or most recent.
+Analytics shows one table of evals that failed, sorted by most failed, most bookings hit,
+or severity.
 Zero tolerance evals sit on top whatever the sort, because any single failure is flagged.
 
 One eval set is live at a time, paired with one agent prompt version. A live set is never
@@ -67,15 +66,63 @@ left rail, starts it again at any time. It walks through the whole product in 11
 evidence, a real failing call, and the publish lifecycle. It navigates between screens on its
 own and spotlights the thing it is talking about. Arrow keys move between steps, Escape quits.
 
-## Mock data
+## Data
 
-`src/data/catalogue.js` holds agents, evals, batches and leads.
-`src/data/universe.js` builds a call universe per agent at load: 1,284 evaluated calls
-for RCB Callback Agent across 6 batches plus single calls, each with a verdict for
-every eval. Verdicts come from a seeded generator, so pass rates, unknown rates and
-trends are consistent and the filters do real work.
+Real, not mock. Everything on screen comes from `rcb_eval_failures - rcb_eval_failures.csv`,
+the eval failure export for the run of **19 Aug 2026**, calls between 19:01 and 20:30.
 
-Bad calls fail more than one eval, so failures cluster the way they do in real review.
+    node scripts/import-csv.mjs "<path to the csv>"
+
+writes `src/data/run-2026-08-19.json`, which the app reads. Re-run it to load a newer export.
+
+- 124 failures across 80 calls
+- 5 evals: denies_being_an_ai, internal_text_spoken_aloud, never_asks_for_slot_after_pitching,
+  slot_outside_counsellor_hours, re_asks_answered_questions
+- 34 of the 80 calls broke more than one eval
+- 17 of those calls had booked a callback, and 12 of those bookings were written to a slot
+  outside the 3 PM to 10 PM counsellor window
+
+Severity, acceptance criteria and judge prompts are authored from each eval's description in
+the sheet. Everything else — counts, quotes, outcomes, durations, bookings — is read straight
+off the export.
+
+## What the export cannot show
+
+The sheet lists failures only. There is no record of how many calls ran that night, and no
+passes or unknowns, so pass rate, fail rate, unknown rate, "how often it applied" and every
+baseline comparison have no denominator. Those columns read `—` until someone supplies the
+number of calls evaluated; set `run.evaluated` in the JSON and the pass column fills in.
+
+For the same reason there are no batches, no date range, and no 7 day trend: one agent, one
+night. The filters that remain — booking and outcome — come off the call record.
+
+## Guided tour
+
+The tour runs on arrival. Opening a deep link does not start it, since someone following a
+link was sent to a particular screen. **Guided tour** on the Managed Agents header, and in the
+left rail, starts it again at any time. It walks through the whole product in 11 steps: the agent list, the health strip, filters, failed evals, the full table,
+evidence, a real failing call, and the publish lifecycle. It navigates between screens on its
+own and spotlights the thing it is talking about. Arrow keys move between steps, Escape quits.
+
+## Data
+
+Real, not mock. Everything on screen comes from `rcb_eval_failures - rcb_eval_failures.csv`,
+the eval failure export for the run of **19 Aug 2026**, calls between 19:01 and 20:30.
+
+    node scripts/import-csv.mjs "<path to the csv>"
+
+writes `src/data/run-2026-08-19.json`, which the app reads. Re-run it to load a newer export.
+
+- 124 failures across 80 calls
+- 5 evals: denies_being_an_ai, internal_text_spoken_aloud, never_asks_for_slot_after_pitching,
+  slot_outside_counsellor_hours, re_asks_answered_questions
+- 34 of the 80 calls broke more than one eval
+- 17 of those calls had booked a callback, and 12 of those bookings were written to a slot
+  outside the 3 PM to 10 PM counsellor window
+
+Severity, acceptance criteria and judge prompts are authored from each eval's description in
+the sheet. Everything else — counts, quotes, outcomes, durations, bookings — is read straight
+off the export.
 
 ## Rates
 

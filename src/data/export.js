@@ -1,44 +1,34 @@
-import { BATCHES, SEVERITY_LABEL } from './catalogue.js'
-import { failuresFor, criteriaFor, evidenceFor, isTest, fmtDur } from './universe.js'
+import { evalByKey, failuresFor, SEVERITY_LABEL, outcomeLabel, fmtDur } from './run.js'
 
 const COLUMNS = [
-  'eval', 'severity', 'call_id', 'lead', 'city', 'date', 'length',
-  'batch', 'source', 'acceptance_criteria_failing', 'agent_line', 'judge_reason', 'test_call'
+  'eval', 'severity', 'interaction_id', 'call_ref', 'date', 'time', 'duration',
+  'rcb_booked', 'call_outcome', 'failure_instance', 'notes'
 ]
 
-function cell (v) {
-  const s = v == null ? '' : String(v)
-  return `"${s.replace(/"/g, '""')}"`
-}
+const cell = v => `"${(v == null ? '' : String(v)).replace(/"/g, '""')}"`
 
 export function toCsv (rows) {
-  const head = COLUMNS.join(',')
-  const body = rows.map(r => COLUMNS.map(c => cell(r[c])).join(','))
-  return [head, ...body].join('\n')
+  return [COLUMNS.join(','), ...rows.map(r => COLUMNS.map(c => cell(r[c])).join(','))].join('\n')
 }
 
-export function failureRows (agent, calls, evalKeys, testOverrides = {}) {
+export function failureRows (calls, evalKeys) {
   const out = []
   evalKeys.forEach(key => {
-    const ev = agent.evals.find(e => e.key === key)
+    const ev = evalByKey(key)
     if (!ev) return
-    failuresFor(agent, calls, key).forEach(({ call, reason }) => {
-      const batch = BATCHES.find(b => b.id === call.batchId)
-      const evidence = evidenceFor(call, ev)
+    failuresFor(calls, key).forEach(({ call, failure }) => {
       out.push({
         eval: ev.name,
         severity: SEVERITY_LABEL[ev.severity],
-        call_id: call.interactionId,
-        lead: call.leadName,
-        city: call.city,
+        interaction_id: call.id,
+        call_ref: call.ref,
         date: call.date,
-        length: fmtDur(call.durationSec),
-        batch: call.batchId || '',
-        source: call.source === 'batch' ? (batch ? batch.name : call.batchId) : `Single — ${call.bda}`,
-        acceptance_criteria_failing: criteriaFor(call, ev).join(' | '),
-        agent_line: evidence.quote || '',
-        judge_reason: reason,
-        test_call: isTest(call, testOverrides) ? 'yes' : 'no'
+        time: call.time,
+        duration: fmtDur(call.durationSec),
+        rcb_booked: call.booked ? 'Yes' : 'No',
+        call_outcome: outcomeLabel(call.outcome),
+        failure_instance: failure.instance,
+        notes: failure.note || ''
       })
     })
   })

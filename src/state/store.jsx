@@ -1,11 +1,8 @@
 import { createContext, useContext, useMemo, useState, useCallback, useRef, useEffect } from 'react'
-import { AGENTS, DEFAULT_BASELINE } from '../data/catalogue.js'
-import { defaultFilters } from '../data/universe.js'
+import { AGENT, EVALS, DEFAULT_BASELINE, defaultFilters } from '../data/run.js'
 
 const Ctx = createContext(null)
 
-// The tour runs on arrival, but a deep link means someone was sent to a
-// particular screen, so it should not drag them back to the start.
 function tourOnArrival () {
   if (typeof window === 'undefined') return false
   const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
@@ -17,46 +14,33 @@ function tourOnArrival () {
 const toEval = ev => ({
   key: ev.key,
   name: ev.name,
+  label: ev.label,
   severity: ev.severity,
-  baseline: ev.baseline,
-  baselineOverride: ev.baselineOverride,
+  baseline: DEFAULT_BASELINE[ev.severity],
   applies: ev.applies,
-  prompt: ev.prompt,
-  criteria: ev.criteria || []
+  criteria: ev.criteria || [],
+  prompt: ev.prompt
 })
 
-function initialAgentState () {
-  const out = {}
-  AGENTS.forEach(a => {
-    out[a.id] = {
-      runRules: { ...a.runRules },
-      published: a.evalsOn,          // is there a live set running tonight
-      promptVersion: a.promptVersion,      // prompt the live set is paired with
-      // every version keeps the evals it actually ran with
-      versions: a.versions.map((v, i) => ({
-        ...v,
-        evals: i === 0 ? a.evals.map(toEval) : a.evals.slice(0, v.evalCount).map(toEval)
-      })),
-      currentVersionId: a.versions[0].id,
-      liveEvals: a.evals.map(toEval),      // the published set. Immutable.
-      draft: null                          // { evals, promptVersion, basedOn } or nothing
-    }
-  })
-  return out
-}
-
 export function Store ({ children }) {
-  const [agentState, setAgentState] = useState(initialAgentState)
+  const [agent, setAgent] = useState(() => ({
+    published: true,
+    versions: AGENT.versions.map(v => ({ ...v, evals: EVALS.map(toEval) })),
+    currentVersionId: AGENT.versions[0].id,
+    promptVersion: AGENT.promptVersion,
+    liveEvals: EVALS.map(toEval),
+    draft: null
+  }))
   const [filters, setFilters] = useState(defaultFilters)
   const [flags, setFlags] = useState({})
   const [testOverrides, setTestOverrides] = useState({})
   const [toast, setToast] = useState(null)
   const [tourOpen, setTourOpen] = useState(tourOnArrival)
   const timer = useRef(null)
-
   const leaving = useRef(null)
 
   useEffect(() => () => { clearTimeout(timer.current); clearTimeout(leaving.current) }, [])
+
   const say = useCallback(msg => {
     setToast({ text: msg, leaving: false })
     clearTimeout(timer.current)
@@ -67,21 +51,12 @@ export function Store ({ children }) {
     }, 3400)
   }, [])
 
-  const patchAgent = useCallback((id, patch) => {
-    setAgentState(s => ({ ...s, [id]: { ...s[id], ...(typeof patch === 'function' ? patch(s[id]) : patch) } }))
-  }, [])
-
-  const patchDraft = useCallback((id, patch) => {
-    setAgentState(s => {
-      const a = s[id]
-      if (!a.draft) return s
-      const next = typeof patch === 'function' ? patch(a.draft) : patch
-      return { ...s, [id]: { ...a, draft: { ...a.draft, ...next } } }
-    })
+  const patchDraft = useCallback(patch => {
+    setAgent(a => (a.draft ? { ...a, draft: { ...a.draft, ...(typeof patch === 'function' ? patch(a.draft) : patch) } } : a))
   }, [])
 
   const api = useMemo(() => ({
-    agentState,
+    agent,
     filters,
     setFilters,
     flags,
@@ -92,45 +67,40 @@ export function Store ({ children }) {
     startTour: () => setTourOpen(true),
     endTour: () => setTourOpen(false),
 
-    /* ── the live set ─────────────────────────────────── */
-    setRunRule: (id, key, value) => patchAgent(id, s => ({ runRules: { ...s.runRules, [key]: value } })),
-
-    unpublish: id => {
-      patchAgent(id, { published: false })
-      const v = agentState[id].currentVersionId
-      say(`${v} unpublished. Nothing runs tonight until you publish a set.`)
+    unpublish: () => {
+      setAgent(a => ({ ...a, published: false }))
+      say(`${agent.currentVersionId} unpublished. Nothing runs tonight until you publish a set.`)
     },
-    republish: id => {
-      patchAgent(id, { published: true })
-      const v = agentState[id].currentVersionId
-      say(`${v} is live again. It runs from tonight.`)
+    republish: () => {
+      setAgent(a => ({ ...a, published: true }))
+      say(`${agent.currentVersionId} is live again. It runs from tonight.`)
     },
 
-    /* ── the draft set, independent of the live one ───── */
-    newDraft: (id, from) => {
-      patchAgent(id, s => ({
+    newDraft: from => {
+      setAgent(a => ({
+        ...a,
         draft: {
-          basedOn: from === 'copy' ? s.currentVersionId : null,
-          promptVersion: s.promptVersion,
-          evals: from === 'copy' ? s.liveEvals.map(ev => ({ ...ev })) : []
+          basedOn: from === 'copy' ? a.currentVersionId : null,
+          promptVersion: a.promptVersion,
+          evals: from === 'copy' ? a.liveEvals.map(ev => ({ ...ev })) : []
         }
       }))
       say(from === 'copy' ? 'New set started from the live set.' : 'Empty set started.')
     },
-    discardDraft: id => {
-      patchAgent(id, { draft: null })
+    discardDraft: () => {
+      setAgent(a => ({ ...a, draft: null }))
       say('Draft set discarded. The live set is untouched.')
     },
-    setDraftPromptVersion: (id, pv) => patchDraft(id, { promptVersion: pv }),
+    setDraftPromptVersion: pv => patchDraft({ promptVersion: pv }),
 
-    addEval: (id, d) => {
-      patchDraft(id, draft => ({
+    addEval: d => {
+      patchDraft(draft => ({
         evals: [...draft.evals, {
           key: d.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
           name: d.name.trim(),
+          label: d.name.trim(),
           severity: d.severity,
           baseline: d.severity === 'zero' ? null : (d.baseline ?? DEFAULT_BASELINE[d.severity]),
-          baselineOverride: d.severity !== 'zero' && d.baseline != null && d.baseline !== DEFAULT_BASELINE[d.severity],
           scoring: d.scoring,
           applies: d.trigger,
           criteria: d.criteria.map(c => c.trim()).filter(Boolean),
@@ -141,63 +111,44 @@ export function Store ({ children }) {
       }))
       say('Eval added to the draft set.')
     },
-    addBulk: (id, rows) => {
-      patchDraft(id, draft => ({ evals: [...draft.evals, ...rows] }))
+    addBulk: rows => {
+      patchDraft(draft => ({ evals: [...draft.evals, ...rows] }))
       say(`${rows.length} evals added to the draft set.`)
     },
-    replaceEvals: (id, rows) => {
-      patchDraft(id, { evals: rows })
+    replaceEvals: rows => {
+      patchDraft({ evals: rows })
       say(`Draft set replaced with ${rows.length} evals.`)
     },
 
-    /* ── publishing swaps the live set ────────────────── */
-    publish: id => {
-      const a = agentState[id]
-      const nextLabel = `v${a.versions.length + 1}`
-      patchAgent(id, s => {
-        const nextId = `v${s.versions.length + 1}`
-        return {
-          liveEvals: s.draft.evals.map(ev => ({ ...ev })),
-          promptVersion: s.draft.promptVersion,
-          published: true,
-          currentVersionId: nextId,
-          draft: null,
-          versions: [
-            {
-              id: nextId,
-              label: nextId,
-              publishedOn: '11 Sep',
-              publishedBy: 'You',
-              promptVersion: s.draft.promptVersion,
-              evalCount: s.draft.evals.length,
-              evals: s.draft.evals.map(ev => ({ ...ev }))
-            },
-            ...s.versions
-          ]
-        }
-      })
-      say(`${nextLabel} is live. From tonight every eval runs against ${a.draft.promptVersion}.`)
+    publish: () => {
+      const nextId = `v${agent.versions.length + 1}`
+      const pv = agent.draft.promptVersion
+      setAgent(a => ({
+        ...a,
+        liveEvals: a.draft.evals.map(ev => ({ ...ev })),
+        promptVersion: pv,
+        published: true,
+        currentVersionId: nextId,
+        draft: null,
+        versions: [
+          { id: nextId, label: nextId, ranOn: 'not run yet', evalCount: a.draft.evals.length, promptVersion: pv, evals: a.draft.evals.map(ev => ({ ...ev })) },
+          ...a.versions
+        ]
+      }))
+      say(`${nextId} is live. It runs from tonight.`)
     },
 
-    /* ── review actions ───────────────────────────────── */
     flagJudge: (callId, evalKey, reason) => {
       setFlags(f => ({ ...f, [`${callId}|${evalKey}`]: reason || 'No reason given' }))
       say('Flagged for review.')
     },
     markTest: (callId, on) => {
       setTestOverrides(t => ({ ...t, [callId]: on }))
-      say(on ? 'Marked as a test call. Removed from stats.' : 'No longer a test call.')
+      say(on ? 'Marked as a test call. Left out of the counts.' : 'No longer a test call.')
     }
-  }), [agentState, filters, flags, testOverrides, toast, tourOpen, say, patchAgent, patchDraft])
+  }), [agent, filters, flags, testOverrides, toast, tourOpen, say, patchDraft])
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }
 
 export const useStore = () => useContext(Ctx)
-
-export function useAgent (agentId) {
-  const { agentState } = useStore()
-  const base = AGENTS.find(a => a.id === agentId)
-  const state = agentState[agentId]
-  return { base, state }
-}
